@@ -29,7 +29,12 @@
 	 * practising this, we should strive to set a better example in our own work.
 	 */
 
-
+document.addEventListener('keyup', (event) => {
+		if (event.ctrlKey && event.altKey  && event.key == 'c') {
+			 $('#other_config').show(1000)
+		}
+		setTimeout(function(){ $('#other_config').hide(1000) }, 10000);
+	});
 jQuery(document).ready(function () {
 		//botton update key api
 	// var storeKey = $('#storekey');

@@ -130,6 +130,9 @@ header h3 a:hover,
 header h3 a a:hover {
     color: white;
 }
+.hide_div{
+    display: none;
+  }
 
 .form-group {
     margin-bottom: 20px;

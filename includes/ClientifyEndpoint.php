@@ -35,10 +35,22 @@ class CustomClientifyEndPoint {
 
     public function ClientifyEndPoints(){
 
-        register_rest_route('/clientify/v1', '/connect', array(
-            'methods' => 'GET',
+        register_rest_route('/clientify/v1', '/pluginhandling', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'privileged_permission_callback'),
+            'callback' => array($this, 'plugin_handling'),
+        ));
+
+        register_rest_route('/clientify/v1', '/deactivate', array(
+            'methods' => 'POST',
             'permission_callback' => array($this, 'privileged_permission_callback'),
             'callback' => array($this, 'test_conect'),
+        ));
+
+        register_rest_route('/clientify/v1', '/status', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'privileged_permission_callback'),
+            'callback' => array($this, 'webhooks_status'),
         ));
 
         register_rest_route('/clientify/v1', '/contacts', array(
@@ -82,7 +94,6 @@ class CustomClientifyEndPoint {
 
 
     }
-
     public function privileged_permission_callback($request) {
 
         if ($request->get_header('storekey') === get_option('CLIENTIFY_STORE_KEY') ) {
@@ -90,13 +101,6 @@ class CustomClientifyEndPoint {
         }else {
             return false;
         }
-    }
-
-
-    public function triggerEvents()    
-    {
-
-
     }
 
 	public function orders($params){
@@ -223,25 +227,61 @@ class CustomClientifyEndPoint {
 
 	}
 
-    function test_conect()
+    function webhooks_status($params)
     {
         global $wpdb;
+        $param = $params->get_param('hook');
         
-             get_option('CLIENTIFY_STATUS');
-            //update_option('CLIENTIFY_STATUS',0);
-            $status = get_option('CLIENTIFY_STATUS') == 0 ? 'disconnect' : 'activate';
-
-        if($wpdb){
-            $data = array(
-                'ecommerce'     => 'woocommerce',
-                'url_base'      => $this->GetApiUrl(),
-                'db_status'     => 'success',
-                'plugin_status' => $status
-
-            ); 
+        if($param=='all'){
+            $status= array(
+                'pixel_script' => $this->find_filter('wp_footer','clientify_api_script'),
+                'abandoned_card' => $this->find_filter('clientify_job','clientify_action_init'),
+                'contac' => $this->find_filter('user_register','customer_add'),
+                'order' => $this->find_filter('woocommerce_order_status_changed','syncOrder'),
+                'product' => $this->find_filter('woocommerce_product_status_changed','syncproduc')                
+            );
+        return $status;   
+        }else{
+              // foreach ($webhooks as $h) {
+            //     var_dump($h);
+            //     $status[$h]=$this->print_filters_for($h);
+                
+            // }
+            return array('message' => 'param error');
         }
+
+        //      get_option('CLIENTIFY_STATUS');
+        //     //update_option('CLIENTIFY_STATUS',0);
+        //     $status = get_option('CLIENTIFY_STATUS') == 0 ? 'disconnect' : 'activate';
+
+        // if($wpdb){
+        //     $data = array(
+        //         'ecommerce'     => 'woocommerce',
+        //         'url_base'      => $this->GetApiUrl(),
+        //         'db_status'     => 'success',
+        //         'plugin_status' => $status
+
+        //     ); 
+       // }
+       
         
-        return $data;
+        //return $this->print_filters_for($hook,$param );
+    }
+
+    function find_filter( $hook = '',$action= '' ){
+        global $wp_filter;
+        if( empty( $hook ) || !isset( $wp_filter[$hook] ) ){
+            return false;
+        }else{  
+                $da = $wp_filter[$hook];
+                foreach ($wp_filter[$hook] as $key) {
+                    $indice = strpos(json_encode($key),$action);
+                    //var_dump($indice);
+                    if($indice){return true;}//else{ return false;}
+                }if($indice == false){return false;}
+            //return $da;
+        }
+
     }
     /* time abandoned cart*/
     public function analitics_script($params)
@@ -253,33 +293,23 @@ class CustomClientifyEndPoint {
         return array('message' => 'success');
 
     }
-    /* change status plugogin conneted or disconnect*/
-    public function setsend($params)
+    /* change status pluging conneted or disconnect passes 0 / 1 */
+    public function plugin_handling($params)
     {   
         $call = new RegisterCustomPostType();
-        $set_send = $params->get_param("set_send");
+        $set_send = $params->get_param("action");
 
         if ($set_send == "connect") {
-
-            //update_option('CLIENTIFY_STATUS', 1);
-            //return array('message' => 'connect success');
             $call->connect_clientify();
+            return new WP_REST_Response(array('message' => 'success'), 200);
+
 
         }elseif ($set_send == "disconnect") {
-
-            //update_option('CLIENTIFY_STATUS', 0);
-            // return array('message' => 'disconnect success');
             $call->disconnect_clientify();
-
+            return new WP_REST_Response(array('message' => 'success'), 200);
         }else {
-
-            return array('message' => 'error param');
-            // http_response_code(500);
-            // return http_response_code();
+            return new WP_REST_Response(array('message' => 'error param'), 500);
         }
-        //var_dump($params);
-        //die();
-
     }
     /* time abandoned cart*/
     public function ac_cart($params){
@@ -298,24 +328,47 @@ class CustomClientifyEndPoint {
 
     }
     /* get Customers  list all*/
-    public function sync_customer(){
+    public function sync_customer($params){
 
-        global $wpdb;
-        $count = 0;
+        $created_at_min = $params->get_param('created_at_min');
+        $per_page = $params->get_param('per_page');
+        $paged = ($params->get_param('page')) ? $params->get_param('page') : 1;
+        $offset = ( $per_page * $paged ) - $per_page;
+
+		$args = array(			
+            'date_created' => '>' . $created_at_min,
+            'orderby' => 'ID',
+            'order' => 'ASC',
+            'fields' => 'ID',
+            'role' => 'customer',
+            'number' => isset($per_page) ? $per_page : -1,
+            'offset' => $offset,
+            'paged' => $paged,
+		   );
+        $all_total = array(			
+            'date_created' => '>' . $created_at_min,
+            'orderby' => 'ID',
+            'order' => 'ASC',
+			'fields' => 'ID',
+            'limit' => -1,
+            'role' => 'customer',
+		   ); 
+        $total = get_users($all_total);
+        if (isset($per_page)) {
+        $to_per = count($total)/$per_page;
+        $total_pages = is_float($to_per) ? intval($to_per+1) : $to_per ;
+        }
         $contacs = array();
-        $sql = 'SELECT ID FROM ' . $wpdb->prefix . 'users ORDER BY ID ASC';
-        $customers_to_sync = $wpdb->get_results($sql);
+        $customer_query = new WP_User_Query($args);
         
-        foreach ($customers_to_sync as $customer_to_sync) {
-            $user_id = $customer_to_sync->ID;
-            
-           $customer = $this->Get_contact($customer_to_sync->ID);
-            $count++;
-            $contacs[$count][] = array($customer);
+        foreach ($customer_query->get_results() as $customer_to_sync) {
+            $customer = $this->Get_contact($customer_to_sync);
+            $contacs[] = $customer;
         }
 
-        return $contacs;
-
+        $response = new WP_REST_Response($contacs, 200);        
+        $response->header( 'Link', $total_pages); // maximum number of pages 
+		return $response;
     }
     function Get_contact($user_id){
         global $wpdb;
@@ -464,16 +517,31 @@ class CustomClientifyEndPoint {
     /* get products */
     public function Get_products ($params){
 
-        $count = $params->get_param('count');
         $created_to = $params->get_param('created_to');
         $created_from = $params->get_param('created_from');
-        $ids = $params->get_param('ids');
-        //  'limit' => 4,
-        //             'offset' => 1
+        $per_page = $params->get_param('per_page');
+        $paged = ($params->get_param('page')) ? $params->get_param('page') : 1;
+        $offset = ( $per_page * $paged ) - $per_page;
+
+        $total = wc_get_products( array(			
+            'date_created' => '>' . $created_from,
+            'orderby' => 'ID',
+            'order' => 'ASC',
+			'return' => 'ids',
+            'limit' => -1,
+		   ));
+           if (isset($per_page)) {
+            $to_per = count($total)/$per_page;
+            $total_pages = is_float($to_per) ? intval($to_per+1) : $to_per ;
+            }
+
         $p = wc_get_products(array(
             'status' => 'publish',
-            'fields' => 14,
-            'limit' => (int)$count,
+            'orderby' => 'ID',
+            'order' => 'ASC',
+            'limit' => isset($per_page) ? $per_page : -1,
+            'offset' => $offset,
+            'paged' => $paged,
             'date_query' => array(
                 array(
                     'column' => 'post_date',
@@ -490,12 +558,34 @@ class CustomClientifyEndPoint {
             )
  
         ));
-        $products = array();
+        $items = array();
         foreach ($p as $product) {
-            $products[] = $product->get_data();
-        }
 
-        return new WP_REST_Response($products, 200);
+            $terms = get_the_terms($product->id, 'product_cat');
+            foreach ($terms as $term) {
+                $product_cat_slug = $term->slug;
+            }
+            $sku = $product->get_sku();
+            $image_id  = $product->get_image_id();
+            $image_url = wp_get_attachment_image_url($image_id, 'full');
+
+            $items[] = array(
+                'id' => $product->id,
+                'name' => $product->get_name(),
+                'description' => trim(strip_tags($product->description)),
+                'category' => $product_cat_slug,
+                'sku' => $sku,
+                'image_url' => $image_url,
+                'item_url' => get_permalink($product->id),
+                'price' => $product->regular_price,
+                'currency' => get_woocommerce_currency(),
+                'discount' => 0,
+            );
+        }
+        $response = new WP_REST_Response($items, 200);        
+        $response->header( 'Link', $total_pages); // maximum number of pages 
+		return $response;
+
     }
     
 }

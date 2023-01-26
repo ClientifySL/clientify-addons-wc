@@ -11,15 +11,13 @@ function clientify_settings_page()
 ?>
 	<div class="conten">
 		<header>
-			<img src="../wp-content/plugins/clientify-addons/public/img/clientify.svg" alt="Clientify" class="logo-clientify-responsive">
+			<img src="../wp-content/plugins/clientify-addons-wc/public/img/clientify.svg" alt="Clientify" class="logo-clientify-responsive">
 			<!-- <h1>Clientify <span>with Forms</span></h1> -->
 			<p>Gestiona y automatiza tu Marketing y Ventas fácilmente.</p>
 		</header>
 		<nav class="nav-tab-wrapper">
 			<a href="?page=clientify-addons/includes/RegisterCustomPostType.php&tab=settings" class="nav-tab color-nav <?php if ($tab === 'settings') : ?>nav-tab-active<?php endif; ?>">
 				<span class="dashicons dashicons-admin-generic"></span><?php _e('Settings', 'clientify'); ?></a>
-			<a href="?page=clientify-addons/includes/RegisterCustomPostType.php&tab=logs" class="nav-tab color-nav <?php if ($tab === 'logs') : ?>nav-tab-active<?php endif; ?>">
-				<span class="dashicons dashicons-media-document"></span><?php _e('Logs', 'clientify'); ?></a>
 		</nav>
 		<?php
 		$api_url  = get_rest_url();
@@ -57,7 +55,7 @@ function clientify_settings_page()
 							<label for="url"><?php _e('API Url', 'clientify'); ?></label>
 						</div>
 					</div>
-					<div class=" form-group">
+					<div class="form-group hide_div" id="other_config">
 						<h2 class="heading">Otras Configuraciones</h2>
 						<!-- <div class="controls">
 							<input type="text" id="key" class="floatLabel" name="CLIENTIFY_API_KEY" value="<?php echo esc_attr(get_option('CLIENTIFY_API_KEY')); ?>">
@@ -99,7 +97,7 @@ function clientify_settings_page()
 						</div>
 
 						<div class="controls">
-							<select name="CLIENTIFY_CART_HOUR" id="CLIENTIFY_CART_HOUR" class="floatLabel" style="pointer-events: none;" readonly>
+							<select name="CLIENTIFY_CART_HOUR" id="CLIENTIFY_CART_HOUR" class="floatLabel">
 								<option value="">
 								<option value="<?php echo get_option('CLIENTIFY_CART_HOUR')
 												?>" <?php if (get_option('CLIENTIFY_CART_HOUR') != '') {
@@ -152,116 +150,7 @@ function clientify_settings_page()
 				/*if ($api_key = get_option('CLIENTIFY_API_KEY')) {
 							manage_clientify_cron('add');
 						}*/
-				break;
-
-			case 'logs':
-				global $wpdb;
-				$customer_logs = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}clientify_customer ORDER BY date_add DESC LIMIT 10");
-				$abandoned_cart_logs = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}clientify_abandoned_cart ORDER BY date_add DESC LIMIT 10");
-				//$order_logs = $wpdb->get_results("SELECT * FROM {$wpdb->prefix}clientify_order ORDER BY date_add DESC");
-				$get_type_orders = get_option('CLIENTIFY_ORDER_STATUS');
-				//var_dump($get_type_orders);
-				$order_logs = $wpdb->get_results("SELECT DISTINCT pm.meta_value AS user_id,pm.post_id AS order_id,cli.clientify_id,
-														p.post_status AS  type_orders , p.post_date AS  date_order
-    													FROM {$wpdb->prefix}postmeta AS pm
-														LEFT JOIN {$wpdb->prefix}posts AS p  ON pm.post_id = p.ID
-														LEFT JOIN {$wpdb->prefix}postmeta AS pm2  ON p.ID = pm2.post_id
-														LEFT JOIN {$wpdb->prefix}clientify_customer AS cli  ON cli.id_customer = pm.meta_value
-														WHERE p.post_type = 'shop_order' AND pm.meta_key = '_customer_user' AND p.post_status = '{$get_type_orders}' 
-														ORDER BY pm.meta_value ASC, pm.post_id DESC LIMIT 10
-					");
-			?>
-				<form class="form-horizontal clientify-log-form">
-					<legend><span class="dashicons dashicons-buddicons-buddypress-logo"></span><?php _e('Customer', 'clientify'); ?></legend>
-
-					<table class="wp-list-table widefat fixed striped table-view-list posts">
-						<thead>
-							<th><?php _e('Customer #', 'clientify'); ?></th>
-							<th><?php _e('Clientify ID', 'clientify'); ?></th>
-							<th><?php _e('Date Time', 'clientify'); ?></th>
-						</thead>
-						<tbody>
-							<?php
-							if ($customer_logs) :
-								foreach ($customer_logs as $customer) : ?>
-									<tr>
-										<td><?php echo $customer->id_customer ?></td>
-										<td><?php echo $customer->clientify_id; ?></td>
-										<td><?php echo $customer->date_add; ?></td>
-									</tr>
-								<?php endforeach;
-							else : ?>
-								<tr>
-									<td colspan="3"><?php _e('No Data', 'clientify'); ?></td>
-								</tr>
-							<?php endif;
-
-							?>
-						</tbody>
-					</table>
-				</form>
-
-				<form class="form-horizontal clientify-log-form">
-					<legend><span class="dashicons dashicons-cart"></span><?php _e('Abandoned Cart', 'clientify'); ?></legend>
-
-					<table class="wp-list-table widefat fixed striped table-view-list posts">
-						<thead>
-							<th><?php _e('Clientify ID', 'clientify'); ?></th>
-							<th><?php _e('Date Time', 'clientify'); ?></th>
-						</thead>
-						<tbody>
-							<?php
-							if ($abandoned_cart_logs) :
-								foreach ($abandoned_cart_logs as $cart) : ?>
-									<tr>
-										<td><?php echo $cart->clientify_id; ?></td>
-										<td><?php echo $cart->date_add; ?></td>
-									</tr>
-								<?php endforeach;
-							else : ?>
-								<tr>
-									<td colspan="3"><?php _e('No Data', 'clientify'); ?></td>
-								</tr>
-							<?php endif;
-
-							?>
-						</tbody>
-					</table>
-				</form>
-
-
-				<form class="form-horizontal clientify-log-form">
-					<legend><span class="dashicons dashicons-list-view"></span><?php _e('Order', 'clientify'); ?></legend>
-
-					<table class="wp-list-table widefat fixed striped table-view-list posts">
-						<thead">
-							<th><?php _e('Order #', 'clientify'); ?></th>
-							<th><?php _e('Clientify ID', 'clientify'); ?></th>
-							<th><?php _e('Date Time', 'clientify'); ?></th>
-							</thead>
-							<tbody>
-								<?php
-
-								if ($order_logs) :
-									foreach ($order_logs as $order) : ?>
-										<tr>
-											<td><?php echo $order->order_id; ?></td>
-											<td><?php echo $order->clientify_id; ?></td>
-											<td><?php echo $order->date_order; ?></td>
-										</tr>
-									<?php endforeach;
-								else : ?>
-									<tr>
-										<td colspan="3"><?php _e('No Data', 'clientify'); ?></td>
-									</tr>
-								<?php endif;
-
-								?>
-							</tbody>
-					</table>
-				</form>
-		<?php
-				break;
+			break;
 		endswitch;
 		?>
 

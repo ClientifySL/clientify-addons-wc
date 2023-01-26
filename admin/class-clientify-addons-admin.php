@@ -97,7 +97,7 @@ class Clientify_Addons_Admin {
 		 */
 
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/clientify-addons-admin.js', array( 'jquery' ), $this->version, false );
-		$base_path = $_SERVER['DOCUMENT_ROOT'] . '/wp-content/plugins/clientify-addons/admin/';
+		$base_path = $_SERVER['DOCUMENT_ROOT'] . '/wp-content/plugins/clientify-addons-wc/admin/';
         wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/clientify-addons-admin.js', array( 'jquery' ), filemtime( $base_path . 'js/clientify-addons-admin.js'), false );
 		//wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/clientify-addons-admin.js', array( 'jquery' ), filemtime( $base_path . 'js/sync-customer.js'), false );
 

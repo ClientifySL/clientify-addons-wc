@@ -208,15 +208,23 @@ class Clientify_Addons {
 		$register_custom_post_type = new RegisterCustomPostType();
 		$clientify_wp_api = new CustomClientifyEndPoint();
 
-		//Hook For cron Job AC
-		$this->loader->add_action('clientify_job', $register_custom_post_type, 'clientify_action_init');
-
-		$this->loader->add_action('wp_footer', $register_custom_post_type, 'clientify_api_script');
+		if(get_option('CLIENTIFY_STATUS') != 0){
+			/*Hook For clientify*/
+			$this->loader->add_action('clientify_job', $register_custom_post_type, 'clientify_action_init');
+			$this->loader->add_action('wp_footer', $register_custom_post_type, 'clientify_api_script');
+			$this->loader->add_action('user_register', $register_custom_post_type, 'customer_add', 10, 1 );
+			$this->loader->add_action( 'woocommerce_order_status_changed', $register_custom_post_type,'syncOrder', 10, 3);
+			/* Abandoned Cart Process*/	
+			$this->loader->add_action('woocommerce_add_to_cart', $register_custom_post_type,'clientify_save_add_to_cart', 10, 2);
+			$this->loader->add_action('woocommerce_update_cart_action_cart_updated',$register_custom_post_type, 'clientify_cart_updated', 20, 1);
+			$this->loader->add_action('woocommerce_remove_cart_item', $register_custom_post_type, 'delete_item_cart');
+			$this->loader->add_action( 'woocommerce_thankyou', $register_custom_post_type,'delete_cart' );	
+			/* End Hooks */ 
+		}
 		$this->loader->add_action('wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action('wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 
 		$this->loader->add_action('rest_api_init', $clientify_wp_api, 'ClientifyEndPoints');
-
 		
 		$this->loader->add_action('admin_init', $register_custom_post_type, 'clientify_settings');
 		$this->loader->add_action( 'init', $register_custom_post_type,'clientify_action_init', 10, 1 );
@@ -224,33 +232,29 @@ class Clientify_Addons {
 		$this->loader->add_action('admin_menu', $register_custom_post_type ,'clientify_create_menu');
 		$this->loader->add_action('admin_menu', $register_custom_post_type, 'clientify_index', 10, 2);		
 		
-		$this->loader->add_action('user_register', $register_custom_post_type, 'customer_add', 10, 1 );
-		
-		$this->loader->add_action('wp_ajax_sync_customer',$register_custom_post_type, 'sync_customer');
-		$this->loader->add_action('wp_ajax_nopriv_sync_customer',$register_custom_post_type, 'sync_customer');
-
-		$this->loader->add_action('wp_ajax_token_id', $clientify_wp_api, 'token_id_ajax');
-		$this->loader->add_action('wp_ajax_nopriv_token_id', $clientify_wp_api, 'token_id_ajax');
-
 		$this->loader->add_action('wp_ajax_connect_clientify', $register_custom_post_type, 'connect_clientify');
 		$this->loader->add_action('wp_ajax_nopriv_connect_clientify', $register_custom_post_type, 'connect_clientify');
-
+		
 		$this->loader->add_action('wp_ajax_disconnect_clientify', $register_custom_post_type, 'disconnect_clientify');
 		$this->loader->add_action('wp_ajax_nopriv_disconnect_clientify', $register_custom_post_type, 'disconnect_clientify');
+		
+		
+		
+		//$this->loader->add_action('wp_ajax_sync_customer',$register_custom_post_type, 'sync_customer');
+		//$this->loader->add_action('wp_ajax_nopriv_sync_customer',$register_custom_post_type, 'sync_customer');
+
+		//$this->loader->add_action('wp_ajax_token_id', $clientify_wp_api, 'token_id_ajax');
+		//$this->loader->add_action('wp_ajax_nopriv_token_id', $clientify_wp_api, 'token_id_ajax');
 
 
 		/* AC CART*/
-		$this->loader->add_action('wp_ajax_update_vk', $register_custom_post_type,'clientify_update_vk' );
-		$this->loader->add_action('wp_ajax_nopriv_update_vk', $register_custom_post_type,'clientify_update_vk' );
+		//$this->loader->add_action('wp_ajax_update_vk', $register_custom_post_type,'clientify_update_vk' );
+		//$this->loader->add_action('wp_ajax_nopriv_update_vk', $register_custom_post_type,'clientify_update_vk' );
 
 		//$this->loader->add_action( 'woocommerce_thankyou', $register_custom_post_type,'syncOrder', 10, 2 );		
-		$this->loader->add_action( 'woocommerce_order_status_changed', $register_custom_post_type,'syncOrder', 10, 3);
+		
 
-		/* Abandoned Cart */	
-		$this->loader->add_action('woocommerce_add_to_cart', $register_custom_post_type,'clientify_save_add_to_cart', 10, 2);
-		$this->loader->add_action('woocommerce_update_cart_action_cart_updated',$register_custom_post_type, 'clientify_cart_updated', 20, 1);
-		$this->loader->add_action('woocommerce_remove_cart_item', $register_custom_post_type, 'delete_item_cart');
-		$this->loader->add_action( 'woocommerce_thankyou', $register_custom_post_type,'delete_cart' );		
+			
 
 		//$this->loader->add_action('admin_init', $optionadmin, 'clientify_settings_page');
 		

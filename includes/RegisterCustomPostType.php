@@ -27,9 +27,9 @@ class RegisterCustomPostType
 		register_setting('clientify-settings-group', 'CLIENTIFY_BOTTOM_SCRIPT');
 		register_setting('clientify-settings-group', 'CLIENTIFY_ORDER_STATUS');
 
-		register_setting('clientify-settings-group', 'CLIENTIFY_CART_HOUR');
+		register_setting('clientify-settings-group', 'CLIENTIFY_CART_HOUR', 6);
 		register_setting('clientify-settings-store', 'CLIENTIFY_STORE_KEY');
-		register_setting('clientify-settings-status', 'CLIENTIFY_STATUS');
+		register_setting('clientify-settings-status', 'CLIENTIFY_STATUS' , 0);
 	}
 
 	function clientify_settings_page()
@@ -90,6 +90,7 @@ class RegisterCustomPostType
 			$post_key = array(
 				'ecommerce' => 'woocommerce',
 				'action'    => 'connect',
+				'store_key' => $key_uid,
 				'store_key' => $key_uid,
 				'name'      => get_option('blogname'),
 				'store_url' => $url_base

@@ -46,15 +46,12 @@ class Clientify_Addons_Deactivator {
 		$post_key = array(
 			'ecommerce' => 'woocommerce',
 			'store_key' => $key_uid,
-			'action' 	=> 'deactivate',
+			'action' 	=> 'uninstall',
 			'name' 		=> get_option('blogname'),
 			'store_url' => $url_base
 		);
 		$api->Post_Base_Clientify($post_key,$key);
-		//$deactivate->disconnect_clientify();
 		update_option('CLIENTIFY_STATUS', 0);
-
-
 		wp_clear_scheduled_hook('clientify_job');
 	}
 
