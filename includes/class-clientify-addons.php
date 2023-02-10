@@ -208,12 +208,14 @@ class Clientify_Addons {
 		$register_custom_post_type = new RegisterCustomPostType();
 		$clientify_wp_api = new CustomClientifyEndPoint();
 
+		$this->loader->add_action('clientify_job', $register_custom_post_type, 'clientify_action_init');
 		if(get_option('CLIENTIFY_STATUS') != 0){
 			/*Hook For clientify*/
-			$this->loader->add_action('clientify_job', $register_custom_post_type, 'clientify_action_init');
 			$this->loader->add_action('wp_footer', $register_custom_post_type, 'clientify_api_script');
 			$this->loader->add_action('user_register', $register_custom_post_type, 'customer_add', 10, 1 );
-			$this->loader->add_action( 'woocommerce_order_status_changed', $register_custom_post_type,'syncOrder', 10, 3);
+			$this->loader->add_action('woocommerce_order_status_changed', $register_custom_post_type,'syncOrder', 10, 3);
+			$this->loader->add_action('woocommerce_update_product', $register_custom_post_type,'productPublished', 10, 1);
+			$this->loader->add_action('woocommerce_new_product', $register_custom_post_type,'productPublished', 10, 1);
 			/* Abandoned Cart Process*/	
 			$this->loader->add_action('woocommerce_add_to_cart', $register_custom_post_type,'clientify_save_add_to_cart', 10, 2);
 			$this->loader->add_action('woocommerce_update_cart_action_cart_updated',$register_custom_post_type, 'clientify_cart_updated', 20, 1);

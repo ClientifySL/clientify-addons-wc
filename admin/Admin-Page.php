@@ -1,15 +1,17 @@
 <?php
 require_once plugin_dir_path(dirname(__FILE__)) . 'includes/GetDataClientify.php';
-
+require_once plugin_dir_path(dirname(__FILE__)) . 'includes/Api.php';
 
 
 $query_orders = new RegisterDataClientify;
 
 function clientify_settings_page()
 {
+	$api = new ClientifyApi;
 	$tab = isset($_GET['tab']) ? $_GET['tab'] : 'settings';
 ?>
 	<div class="conten">
+	<input type="hidden" id="api" name="api" value="<?php echo $api->api_url; ?>">
 		<header>
 			<img src="../wp-content/plugins/clientify-addons-wc/public/img/clientify.svg" alt="Clientify" class="logo-clientify-responsive">
 			<!-- <h1>Clientify <span>with Forms</span></h1> -->
@@ -27,6 +29,7 @@ function clientify_settings_page()
 			case 'settings': ?>
 				<div class='general'>
 					<input type="hidden" id="status_clientify" name="CLIENTIFY_STATUS" value="<?php echo esc_attr(get_option('CLIENTIFY_STATUS')); ?>">
+					
 					<div class="form-group">
 						<!-- <h2 class="heading">Configuracion General</h2> -->
 
@@ -49,10 +52,6 @@ function clientify_settings_page()
 							<label for="storekey"><?php _e('Store Key', 'clientify'); ?></label>
 							<div class="message"></div>
 							<!-- <button id="updateStoreKey" class="custom-class">Update Store Key</button> -->
-						</div>
-						<div class="controls">
-							<input type="text" id="url" class="floatLabel" name="URL_BASE" value="<?php echo $api_url ?>" readonly>
-							<label for="url"><?php _e('API Url', 'clientify'); ?></label>
 						</div>
 					</div>
 					<div class="form-group hide_div" id="other_config">
@@ -112,6 +111,10 @@ function clientify_settings_page()
 								}	?>
 							</select>
 							<label for="fruit">Tiempo Carro Abandonado</label>
+						</div>
+						<div class="controls">
+							<input type="text" id="url" class="floatLabel" name="URL_BASE" value="<?php echo $api_url ?>" readonly>
+							<label for="url"><?php _e('API Url', 'clientify'); ?></label>
 						</div>
 					</div>
 					<!--  More -->

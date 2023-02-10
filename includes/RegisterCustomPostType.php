@@ -45,8 +45,6 @@ class RegisterCustomPostType
 		//if (isset($_GET['sync-clientify-abandoned-carts'])) {
 		global $wpdb;
 
-		$shop_name = get_bloginfo('name');
-		$msg = '';
 		if (is_plugin_active('woocommerce/woocommerce.php')) {
 			$cart_hour = (int)get_option('CLIENTIFY_CART_HOUR');
 			$sql = 'SELECT DISTINCT c.cookie_cart_id, c.id_customer FROM ' . $wpdb->prefix . 'cart c ';
@@ -62,14 +60,10 @@ class RegisterCustomPostType
 
 				}
 			}
-
-
-			//$msg = 'Synced ' . $count . ' cart(s)';
 		}
 
 		//}
 	}
-
 	// END create custom plugin settings menu
 
 	/* Connect and Disconnect bridge wicht clientify */
@@ -90,7 +84,6 @@ class RegisterCustomPostType
 			$post_key = array(
 				'ecommerce' => 'woocommerce',
 				'action'    => 'connect',
-				'store_key' => $key_uid,
 				'store_key' => $key_uid,
 				'name'      => get_option('blogname'),
 				'store_url' => $url_base
@@ -310,96 +303,6 @@ class RegisterCustomPostType
 		return $data;
 	}
 
-	// function create_clientify_contact($order_id)
-	// {
-
-
-	// 	$order = new WC_Order($order_id);
-	// 	$clientify_vk = $_COOKIE['clientify_vk'];
-	// 	$order_email = $order->billing_email;
-	// 	$customer_phones = array();
-	// 	// check if there are any users with the billing email as user or email
-	// 	$email = email_exists($order_email);
-	// 	$user = username_exists($order_email);
-
-	// 	$site_name = get_option('blogname');
-	// 	$site_name = empty($site_name) ? 'WordPress' : $site_name;
-
-	// 	// if the UID is null, then it's a guest checkout
-	// 	if ($user == false && $email == false) {
-	// 		$data = array(
-	// 			'first_name' => $order->billing_first_name,
-	// 			'last_name' => $order->billing_last_name,
-	// 			'email' => $order_email,
-	// 			'contact_source' => get_option('blogname'),
-	// 			'custom_fields' => [],
-	// 			'tags' => array(
-	// 				'woocommerce',
-	// 				$site_name,
-	// 			),
-	// 		);
-
-	// 		$street = $order->billing_address_1 . (!empty($order->billing_address_2) ? ', ' . $order->billing_address_2 : '');
-	// 		$city = $order->billing_city;
-	// 		$country = WC()->countries->countries[$order->billing_country];
-	// 		$postal_code = $order->billing_postcode;
-	// 		$visitor_key = (string)$clientify_vk;
-
-	// 		$customer_address = array(
-	// 			'type' => 1
-	// 		);
-
-	// 		if ($street) {
-	// 			$customer_address['street'] = $street;
-	// 		}
-
-	// 		if ($city) {
-	// 			$customer_address['city'] = $city;
-	// 		}
-
-	// 		if ($country) {
-	// 			$customer_address['country'] = $country;
-	// 		}
-
-	// 		if ($postal_code) {
-	// 			$customer_address['postal_code'] = $postal_code;
-	// 		}
-
-	// 		if (!empty($order->get_billing_state())) {
-	// 			$customer_address['state'] = WC()->countries->get_states($order->billing_country)[$order->get_billing_state()];
-	// 			if (empty($customer_address['state'])) {
-	// 				unset($customer_address['state']);
-	// 			}
-	// 		}
-
-	// 		$data['addresses'][] = $customer_address;
-
-	// 		if (!empty($order->get_billing_company())) {
-	// 			$data['company'] = $order->get_billing_company();
-	// 		}
-
-	// 		if (!empty($order->billing_phone) && !in_array($order->billing_phone, $customer_phones)) {
-	// 			$data['phones'][] = array(
-	// 				'phone' => $order->billing_phone
-	// 			);
-	// 			$customer_phones[] = $order->billing_phone;
-	// 		}
-
-	// 		if ($visitor_key) {
-	// 			$data['visitor_key'] = $visitor_key;
-	// 		}
-
-	// 		$api = new ClientifyApi;
-	// 		$guest_contact = $api->Post_Contacts_Clientify($data);
-	// 		$clientify_id = null;
-
-	// 		if (isset($guest_contact->id) && $guest_contact->id) {
-	// 			$clientify_id = $guest_contact->id;
-	// 		}
-	// 		return $clientify_id;
-	// 	}
-	// }
-
 	function getContactByCustomerId($id_customer, $update = false)
 	{
 		global $wpdb;
@@ -418,9 +321,9 @@ class RegisterCustomPostType
 
 		return $clientify_id;
 	}
-
 	/* END contacs seccition  */
-	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+
+
 	/* customer Secction*/
 
 	//Hook register user in woocomece
@@ -612,8 +515,67 @@ class RegisterCustomPostType
 	}
 
 	/* END Sync customer Secction*/
-	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+	/* products */
+	function productPublished($product_id){
+
+		$endpoint_class = new CustomClientifyEndPoint();
+		$product = wc_get_product( $product_id );
+		$url_base = $endpoint_class->GetApiUrl();
+		$categories = array();
+        $sub_categories= array();
+		$terms = get_the_terms($product_id, 'product_cat');
+		foreach ($terms as $term) {
+			if ($term->parent == 0){                    
+				$categories[] = $term->term_id.":".$term->slug;
+			}else{
+				$sub_categories[] = $term->parent.":".$term->slug;
+			}          
+		}
+
+		$sku = $product->get_sku();
+		$image_id  = $product->get_image_id();
+		$image_url = wp_get_attachment_image_url($image_id, 'full');
+		$product_instance = wc_get_product($product_id);
+		$product_full_description = $product_instance->get_description();
+		$price = $product->price;
+
+		$item = array(
+			'status' => 'product',
+			'id' => $product_id,
+			'name' => $product->get_name(),
+			'description' => $product_full_description,
+			'price' => $price == 0 ? 0 : $price,
+			'item_url' => get_permalink($product_id),
+			'currency' => get_option('woocommerce_currency'),
+			'category' => implode(",",$categories),
+            'sub_categories'=> implode(",",$sub_categories),
+			'sku' => $sku,
+			'product_picture_url' => $image_url,
+			'store_url' => $url_base
+		);
+
+
+		$api = new ClientifyApi;
+		$clientify_product = $api->Post_Product_Clientify($item);
+
+		return $clientify_product;
+	}
+	function get_array_categorys($product_id)
+	{
+		$all = array();
+		$product = wc_get_product( $product_id );
 	
+	$product_data = $product->get_data();
+	$category_ids = $product_data['category_ids'];
+	foreach ($category_ids as $category_id){
+		$term_object = get_term_by('id', $category_id, 'product_cat');
+		$category_name = $term_object->name;
+		$category_link = get_category_link($category_id);
+		list($all) = $category_name;
+	}
+		return $all;
+		
+	}
 	function syncOrder($order_id, $status_transition_to, $that)
 	{
 		global $product;
@@ -638,11 +600,17 @@ class RegisterCustomPostType
 
 			foreach ($products as $order_product) {
 
+				$categories = array();
+				$sub_categories= array();
 				$terms = get_the_terms($order_product['product_id'], 'product_cat');
 				foreach ($terms as $term) {
-					$product_cat_slug = $term->slug;
+			
+					if ($term->parent == 0){                    
+						$categories[] = $term->term_id.":".$term->slug;
+					}else{
+						$sub_categories[] = $term->parent.":".$term->slug;
+					}                
 				}
-
 				$product = $order_product->get_product();
 				$sku = $product->get_sku();
 				$image_id  = $product->get_image_id();
@@ -663,7 +631,8 @@ class RegisterCustomPostType
 				$items[] = array(
 					'name' => $order_product->get_name(),
 					'description' => $product_full_description,
-					'category' => $product_cat_slug,
+					'category' => implode(",",$categories),
+					'sub_categories'=> implode(",",$sub_categories),
 					'sku' => $sku,
 					'image_url' => $image_url,
 					'item_url' => get_permalink($order_product['product_id']),
@@ -687,6 +656,7 @@ class RegisterCustomPostType
 				'store_url' => $url_base,
 				'currency' => $currency,
 				'products' => $items,
+				'price'	=> $total_price,
 				//'visitor_key' => (string)$this->getVisitorKeyByCartId($_COOKIE['vk']),
 				'coupon' => $order_discount_total ? $order_discount_total : 0,
 			);
@@ -697,9 +667,10 @@ class RegisterCustomPostType
 				);
 			}
 			
+			
 			$api = new ClientifyApi;
 			$clientify_order = $api->Post_Order_Clientify($data);
-
+			
 			$res_cart_ac = $wpdb->get_row("SELECT * FROM {$wpdb->prefix}cart WHERE id_customer  = {$id_customer} ");
 			
 			if (!empty($clientify_order) && $res_cart_ac != '') {
@@ -709,21 +680,15 @@ class RegisterCustomPostType
 			return $clientify_order;
 		}
 	}
-
 	/* END Sync Orders Secction*/
-
-	function clientify_api_script()
-	{
+	function clientify_api_script(){
 
 		$bottom_script = get_option('CLIENTIFY_SCRIPT');
 		if (!empty($bottom_script)) {
-
-			echo $bottom_script;
+			printf("<script src='%s'></script>",esc_attr($bottom_script));
 		}
 	}
-
 	/*  ABANDON CART FUNTIONS  */
-
 	function clientify_save_add_to_cart($cart_item_key, $product_id)
 	{
 		global $wpdb;
@@ -877,10 +842,9 @@ class RegisterCustomPostType
 		$data = array(
 			'status' => 'abandoned',
 			'abandoned_date' => date('Y-m-d', strtotime($cart_date)),
-			'cart_id' => is_null($cookie_cart_id->id_customer) ? $cookie_cart_id->cookie_cart_id : $cookie_cart_id->id_customer,
 			'ecommerce' => 'woocommerce',
 			'shop_name' => get_option('blogname'),
-			'order_url' => $cart_page_url,
+			'order_url' => $cart_page_url.$cookie_cart_id->id_clientify_abandoned_cart,
 			'currency' => get_option('woocommerce_currency'),
 			'store_url' => $url_base,
 			'products' => $items,
@@ -891,25 +855,37 @@ class RegisterCustomPostType
 		} else {
 			$data['visitor_key'] = $visitor_key;
 		}
-		$api = new ClientifyApi;
-		$clientify_cart = $api->Post_Order_Clientify($data);
 
 		$in_aban = array(
 			'cookie_cart_id' => is_null($cookie_cart_id->cookie_cart_id) || $cookie_cart_id->cookie_cart_id == '' ? NULL : $cookie_cart_id->cookie_cart_id,
 			'id_customer' => is_null($cart_item->id_customer) || $cart_item->id_customer == '' ? NULL : $cart_item->id_customer,
 		);
-		
-		if ($clientify_cart->status != 'error') {
-			$wpdb->insert($wpdb->prefix . "clientify_abandoned_cart", $in_aban);
+		$wpdb->insert($wpdb->prefix . "clientify_abandoned_cart", $in_aban);
+		$id_cart = $wpdb->get_results('SELECT id_clientify_abandoned_cart FROM ' . $wpdb->prefix . 'clientify_abandoned_cart where '. $table_name .' = "' . $id_contac . '"');
+		$data['cart_id'] = $id_cart[0]->id_clientify_abandoned_cart;
+		$data['order_id'] = $id_cart[0]->id_clientify_abandoned_cart;
+
+		$api = new ClientifyApi;
+		$clientify_cart = $api->Post_Order_Clientify($data);
+
+		if ($clientify_cart->status == 'error') {
+			$errordata = $clientify_cart->data;
+			
+			if(strpos($errordata, 'Abandoned cart is already registered') == true){
+				return true;
+			}else{
+				$wpdb->delete(
+					$wpdb->prefix . 'clientify_abandoned_cart', 		// table name with dynamic prefix
+					['id_clientify_abandoned_cart' => $id_cart[0]->id_clientify_abandoned_cart], 						// which id need to delete
+					['%d'], 							// make sure the id format
+				);
+			}			
 		}
 	}
 	/* END ABANDON CART FUNTIONS */
 	//Visitor
-
 	public function clientify_update_vk()
 	{
-		var_dump($_POST);
-		die();
 		global $wpdb;
 
 		$user = wp_get_current_user();

@@ -103,6 +103,7 @@ jQuery(document).ready(function () {
 		var btnconnect = jQuery(this);
 		var form = $('#api-form-settings');
 		var apikey = $("#key").val();
+		var api = $("#api").val();
 		var res = 0;
 		btnconnect.attr("disabled", true).text(btnconnect.data("loading-text"));
 
@@ -135,12 +136,16 @@ jQuery(document).ready(function () {
 
 						}else {
 
-							if (res === "null" || res === "" || res.data['status'] == "error" || res.data['status'] == "Invalid token." || res['status'] == "store_id field not found" ) {	
+							if (res === "null" || res === "" || res.data['status'] == "error" || res.data['status'] == "Invalid token." || res['status'] == "store_id field not found" ||
+							res.data['status'] == "failed" ) {
 
-								if(res.data['status'] == "Invalid token."){
+								if(res.data['status'] == "failed"){
+									statusMessage('other owner with this store')
+									$("#key").focus();
+								}else if(res.data['status'] == "Invalid token."){
 									statusMessage('Error Invalid Token','error')
 									$("#key").focus();
-								}else {
+								}else{
 									statusMessage('Error de conexión Clientify','error')
 									$("#key").focus();
 								}
@@ -152,6 +157,9 @@ jQuery(document).ready(function () {
 									btnconnect.attr("disabled", true).text("Conectado").addClass('connected');
 									 form.submit();
 									$("#key").focus();
+									var win = window.open(api+'ecommerce/settingsv2/list-store/woocommerce', '_blank');
+									//$(location).attr('href', 'https://ecommerce.ngrok.io/ecommerce/settingsv2/list-store/woocommerce')
+									
 								}
 								if (response == '' || response == 0 ) {
 									statusMessage('Error al conectar Clientify API Key Vacía','error');
@@ -192,8 +200,8 @@ jQuery(document).ready(function () {
 				success: function(response) {				
 					res = JSON.parse(response);	
 					console.log(response + ' real')			
-					console.log(res);
-					if (res === null || res.data['status'] == "failed" ) {
+					console.log(res.detail);
+					if (res === null || res.detail == "Invalid token." || res.data['status'] == "failed"  ) {
 						statusMessage('Error Al Desconectar Clientify','error');
 						$("#key").focus();
 						location.reload();

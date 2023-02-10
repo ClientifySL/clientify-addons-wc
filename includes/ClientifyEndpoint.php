@@ -21,17 +21,6 @@ class CustomClientifyEndPoint {
         return $new_key;
   
     }
-    // public function token_id_ajax()
-    // {
-    //     $new_key = str_replace('-', '', wp_generate_uuid4());
-    //     update_option('CLIENTIFY_STORE_KEY', $new_key);
-    //     $api = new ClientifyApi;
-    //     $post_key = array('key_store'=> $new_key);
-    //     $contact = $api->Post_Base_Clientify($post_key);
-    //     echo  json_encode($new_key);
-    //     die();
-    // }
-
 
     public function ClientifyEndPoints(){
 
@@ -92,6 +81,12 @@ class CustomClientifyEndPoint {
             'callback' => array($this, 'orders'),
         ));
 
+        register_rest_route('/clientify/v1', '/abandoned', array(
+            'methods' => 'GET',
+            'permission_callback' => array($this, 'privileged_permission_callback'),
+            'callback' => array($this, 'gat_list_abandoned_cart'),
+        ));
+
 
     }
     public function privileged_permission_callback($request) {
@@ -150,7 +145,8 @@ class CustomClientifyEndPoint {
 		   $contact = null;
 		   $lang = get_bloginfo("language");
 		   $products = $order->get_items();
-		   $currency = $order->get_currency();           
+		   $currency = $order->get_currency();
+           $total_price = $order->get_total();          
 		   $items = array();
 
 		   foreach ($products as $order_product) {
@@ -205,6 +201,7 @@ class CustomClientifyEndPoint {
             'store_url' => $url_base,
             'currency' => $currency,
             'products' => $items,
+            'price' => $total_price,
             //'visitor_key' => (string)$this->getVisitorKeyByCartId($_COOKIE['cookie_cart_id']),
             'coupon' => $order_discount_total ? $order_discount_total : 0,
 
@@ -238,15 +235,11 @@ class CustomClientifyEndPoint {
                 'abandoned_card' => $this->find_filter('clientify_job','clientify_action_init'),
                 'contac' => $this->find_filter('user_register','customer_add'),
                 'order' => $this->find_filter('woocommerce_order_status_changed','syncOrder'),
-                'product' => $this->find_filter('woocommerce_product_status_changed','syncproduc')                
+                'product' => $this->find_filter('woocommerce_new_product','productPublished')                
             );
         return $status;   
         }else{
-              // foreach ($webhooks as $h) {
-            //     var_dump($h);
-            //     $status[$h]=$this->print_filters_for($h);
-                
-            // }
+
             return array('message' => 'param error');
         }
 
@@ -276,7 +269,6 @@ class CustomClientifyEndPoint {
                 $da = $wp_filter[$hook];
                 foreach ($wp_filter[$hook] as $key) {
                     $indice = strpos(json_encode($key),$action);
-                    //var_dump($indice);
                     if($indice){return true;}//else{ return false;}
                 }if($indice == false){return false;}
             //return $da;
@@ -300,13 +292,42 @@ class CustomClientifyEndPoint {
         $set_send = $params->get_param("action");
 
         if ($set_send == "connect") {
-            $call->connect_clientify();
-            return new WP_REST_Response(array('message' => 'success'), 200);
+            $key_uid = $this->token_id();
+            $url_base = $this->GetApiUrl();
+            $post_key = array(
+				'ecommerce' => 'woocommerce',
+				'action'    => 'connect',
+				'store_key' => $key_uid,
+				'name'      => get_option('blogname'),
+				'store_url' => $url_base
+			);
+            update_option('CLIENTIFY_STATUS', 1);
 
+            if (get_option('CLIENTIFY_STATUS') == 1) {
+                return new WP_REST_Response(array('message' => 'success','data'=> $post_key), 200);
+            }
+            else{
+                return new WP_REST_Response(array('message' => 'error'), 500);
+            }  
 
         }elseif ($set_send == "disconnect") {
-            $call->disconnect_clientify();
-            return new WP_REST_Response(array('message' => 'success'), 200);
+            $key_uid = get_option('CLIENTIFY_STORE_KEY');
+			$url_base = $this->GetApiUrl();
+			$post_key = array(
+				'ecommerce' => 'woocommerce',
+				'action'    => 'disconnect',
+				'store_key' => $key_uid,
+				'name'      => get_option('blogname'),
+				'store_url' => $url_base
+			);
+            update_option('CLIENTIFY_STATUS', 0);
+            if (get_option('CLIENTIFY_STATUS') == 0) {
+                return new WP_REST_Response(array('message' => 'success','data'=> $post_key), 200);
+            }
+            else{
+                return new WP_REST_Response(array('message' => 'error'), 500);
+            }
+            
         }else {
             return new WP_REST_Response(array('message' => 'error param'), 500);
         }
@@ -323,8 +344,6 @@ class CustomClientifyEndPoint {
             // http_response_code(500);
             // return http_response_code();
         }
-        //var_dump($params);
-        //die();
 
     }
     /* get Customers  list all*/
@@ -560,10 +579,16 @@ class CustomClientifyEndPoint {
         ));
         $items = array();
         foreach ($p as $product) {
-
+            $categories = array();
+            $sub_categories= array();
             $terms = get_the_terms($product->id, 'product_cat');
             foreach ($terms as $term) {
-                $product_cat_slug = $term->slug;
+                
+                if ($term->parent == 0){                    
+                    $categories[] = $term->term_id.":".$term->slug;
+                }else{
+                    $sub_categories[] = $term->parent.":".$term->slug;
+                }                
             }
             $sku = $product->get_sku();
             $image_id  = $product->get_image_id();
@@ -573,13 +598,14 @@ class CustomClientifyEndPoint {
                 'id' => $product->id,
                 'name' => $product->get_name(),
                 'description' => trim(strip_tags($product->description)),
-                'category' => $product_cat_slug,
+                'category' => implode(",",$categories),
+                'sub_categories'=> implode(",",$sub_categories),
                 'sku' => $sku,
                 'image_url' => $image_url,
                 'item_url' => get_permalink($product->id),
-                'price' => $product->regular_price,
-                'currency' => get_woocommerce_currency(),
-                'discount' => 0,
+                'price' => $product->regular_price == '' ||   $product->regular_price == NULL ? 0 : $product->regular_price,
+                'currency' => get_woocommerce_currency()
+                
             );
         }
         $response = new WP_REST_Response($items, 200);        
@@ -587,5 +613,119 @@ class CustomClientifyEndPoint {
 		return $response;
 
     }
+
+    function gat_list_abandoned_cart($params){
+
+        
+        global $wpdb;
+        $all = array();
+        $created_from = $params->get_param('created_from');
+        $created_end = empty($params->get_param('created_end')) ? date("Y-m-d") : $params->get_param('created_end');
+
+        $per_page = empty($params->get_param('per_page')) ? 0 : $params->get_param('per_page');
+        $paged = empty($params->get_param('page')) ? 1 : $params->get_param('page');
+		$page =(int)(!isset($paged)) ? 1 : $paged;
+		$per_page = (int)$params["per_page"];
+		$date_null = $created_from != 0 ? "between  '".$created_from."'  and '".$created_end."'" : '';
+		$limit = $per_page != 0 ? 'LIMIT '.(($page-1)*$per_page).' , '.$per_page.'' : '' ;
+
+
+        $total = $wpdb->get_results("SELECT DISTINCT c.cookie_cart_id, c.id_customer FROM ". $wpdb->prefix ."clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null."");
+
+        $order_ids = "SELECT DISTINCT c.cookie_cart_id, c.id_customer,c.id_clientify_abandoned_cart FROM ". $wpdb->prefix . "clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." ORDER BY c.id_customer ".$limit;
+        if (isset($per_page)) {
+            $to_per = count($total)/$per_page;
+            $total_pages = is_float($to_per) ? intval($to_per+1) : $to_per ;
+            }
+
+        $cookie_carts = $wpdb->get_results($order_ids);
+
+        if (!empty($cookie_carts)) {
+            foreach ($cookie_carts as $cookie_carts_results => $cookie_cart_id) {
+
+            $endpoint_class = new CustomClientifyEndPoint();
+            $url_base = $endpoint_class->GetApiUrl();
+            $id_contac = is_null($cookie_cart_id->id_customer) || $cookie_cart_id->id_customer == '' ? $cookie_cart_id->cookie_cart_id : $cookie_cart_id->id_customer;
+            $table_name = is_null($cookie_cart_id->id_customer) || $cookie_cart_id->id_customer == '' ? 'cookie_cart_id' : 'id_customer';
+            $carts = $wpdb->get_results('SELECT * FROM ' . $wpdb->prefix . 'cart where '. $table_name .' = "' . $id_contac . '"');		
+            $items = array();
+
+
+            foreach ($carts as $cart_item_key => $cart_item) {
+                
+                $contact = null;
+                $visitor_key = null;
+
+                if ($cart_item->id_customer) {
+                    $contact = $cookie_cart_id->id_customer;
+                } else {
+                    $visitor_key = (string)$cookie_cart_id->cookie_cart_id;
+                }
+                if (empty($contact) && empty($visitor_key)) {
+                    return false;
+                }
+                $product_id = $cart_item->id_product;
+                $terms = get_the_terms($product_id, 'product_cat');
+
+                foreach ($terms as $term) {
+                    $product_cat = $term->name;
+                }
+
+                $cart_date = $cart_item->date_add;
+                $product = wc_get_product($product_id);
+
+                $price = $product->get_price();
+                $without_reduction = $product->get_regular_price();
+                $discount = $without_reduction - $price;
+                if ($discount) {
+                $discount = round( ($discount / $without_reduction) * 100, 2);
+                }
+
+                $price = $product->get_sale_price();
+                if (empty($price)) {
+                    $price = $product->get_regular_price();
+                }	
+
+                $items[] = array(
+                    'name' => $product->get_title(),
+                    'description' => $product->get_description(),
+                    'category' => $product_cat,
+                    'sku' => $product->get_sku(),
+                    'image_url' => get_the_post_thumbnail_url($product_id),
+                    'item_url' => $product->get_permalink($cart_item),
+                    'price' => $price,
+                    'quantity' => $cart_item->quantity,
+                    'discount' => 0,
+                );		
+            }
+            $cart_page_id = wc_get_page_id( 'cart' );
+            $cart_page_url = $cart_page_id ? get_permalink( $cart_page_id ) : '';	
+
+            $data = array(
+                'status' => 'abandoned',
+                'abandoned_date' => date('Y-m-d', strtotime($cart_date)),
+                'cart_id' => $cookie_cart_id->id_clientify_abandoned_cart,
+                'order_id' => $cookie_cart_id->id_clientify_abandoned_cart,
+                'ecommerce' => 'woocommerce',
+                'shop_name' => get_option('blogname'),
+                'order_url' => $cart_page_url.$cookie_cart_id->id_clientify_abandoned_cart,
+                'currency' => get_option('woocommerce_currency'),
+                'store_url' => $url_base,
+                'products' => $items,
+                'coupon' =>  0
+            );
+            if ($contact) {
+                $data['contact'] = $this->Get_contact($cookie_cart_id->id_customer);
+            } else {
+                $data['visitor_key'] = $visitor_key;
+            }     
+            $all [] = $data;
+        }
+}
+        $response = new WP_REST_Response($all, 200);        
+        $response->header( 'Link', $total_pages); // maximum number of pages 
+        return $response;
+		
+	}
     
 }
