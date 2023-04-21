@@ -8,17 +8,17 @@
  * registers the activation and deactivation functions, and defines a function
  * that starts the plugin.
  *
- * @link              Emerson Ramirez
+ * @link              Clientify SL
  * @since             1.0.0
- * @package           Clientify_Addons
+ * @package           Clientify-ecommerce
  *
  * @wordpress-plugin
- * Plugin Name:       Clientify-Addons
- * Plugin URI:        https://github.com/emersonaly
- * Description:       This is a short description of what the plugin does. It's displayed in the WordPress admin area.
+ * Plugin Name:       Clientify-ecommerce
+ * Plugin URI:        http://clientify.com/
+ * Description:       Conecta woocommerce con Clientify para automatizar el marketing de tu tienda online.
  * Version:           1.0.0
- * Author:            Emerson Ramirez
- * Author URI:        Emerson Ramirez
+ * Author:            Clientify SL
+ * Author URI:        Clientify SL
  * License:           GPL-2.0+
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
  * Text Domain:       clientify-addons

@@ -151,10 +151,26 @@ class CustomClientifyEndPoint {
 
 		   foreach ($products as $order_product) {
 
-			   $terms = get_the_terms($order_product['product_id'], 'product_cat');
-			   foreach ($terms as $term) {
-				   $product_cat_slug = $term->slug;
-			   }
+               $categories = array();
+               $sub_categories= array();
+               $new_categories = [];
+               $terms = get_the_terms($order_product['product_id'], 'product_cat');
+               var_dump($terms);
+               foreach ($terms as $term) {
+                    if ($term->parent == 0){                    
+                        $categories[] = $term->term_id.":".$term->slug;
+                    }else{
+                        foreach ($categories as $cat ) {
+                            $cat_data = explode(":",$cat);													
+                            (int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
+                        }
+                        if(!$cat){
+                            $term_search = get_term_by('id', $term->parent, 'product_cat');
+                            $categories[] = $term_search->term_id.":".$term_search->slug;
+                        }
+                        $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+                    }          
+                }
 
 			   $product = $order_product->get_product();
 			   
@@ -167,23 +183,32 @@ class CustomClientifyEndPoint {
 			   $tax_amount = $order->get_item_tax($order_product, true, true);
 			   $inc_tax = $tax_amount > 0 ? true : false;
 			   $price = $product->get_sale_price();
+               $discount_price = floatval($order_product['subtotal']) - floatval($order_product['total']);
 
 			   if ($inc_tax) {
 				   $price = wc_get_price_including_tax($product, array('price' => $price));
 			   } else {
 				   $price = wc_get_price_excluding_tax($product, array('price' => $price));
 			   }
+               foreach($categories as $cat_clean){
+                    if (!in_array($cat_clean, $new_categories))
+                        $new_categories[] = $cat_clean;
+                }
 
-			   $items[] = array(
+                  
+
+               $join_cat = implode(",",$new_categories)."/".implode(",",$sub_categories);
+			   $discount = ($discount_price * 100) / $price;
+               $items[] = array(
 				   'name' => $order_product->get_name(),
 				   'description' => $product_full_description,
-				   'category' => $product_cat_slug,
+				   'category' => $join_cat,
 				   'sku' => $sku,
 				   'image_url' => $image_url,
 				   'item_url' => get_permalink($order_product['product_id']),
 				   'price' => $price,
 				   'quantity' => $order_product->get_quantity(),
-				   'discount' => 0, //$discount
+				   'discount' => $discount != 0 ? $discount : 0, //$discount
 			   );
 		   }
 		   //total discount
@@ -578,28 +603,40 @@ class CustomClientifyEndPoint {
  
         ));
         $items = array();
+        
         foreach ($p as $product) {
             $categories = array();
             $sub_categories= array();
+            $new_categories = [];
             $terms = get_the_terms($product->id, 'product_cat');
             foreach ($terms as $term) {
-                
                 if ($term->parent == 0){                    
                     $categories[] = $term->term_id.":".$term->slug;
                 }else{
-                    $sub_categories[] = $term->parent.":".$term->slug;
-                }                
-            }
+                    foreach ($categories as $cat ) {
+                        $cat_data = explode(":",$cat);													
+                        (int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
+                    }
+                    if(!$cat){
+                        $term_search = get_term_by('id', $term->parent, 'product_cat');
+                        $categories[] = $term_search->term_id.":".$term_search->slug;
+                    }
+                    $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+                }          
+            }       
             $sku = $product->get_sku();
             $image_id  = $product->get_image_id();
             $image_url = wp_get_attachment_image_url($image_id, 'full');
-
+            foreach($categories as $cat_clean){
+                if (!in_array($cat_clean, $new_categories))
+                    $new_categories[] = $cat_clean;
+            }  
+            $join_cat = implode(",",$new_categories)."/".implode(",",$sub_categories); 
             $items[] = array(
                 'id' => $product->id,
                 'name' => $product->get_name(),
                 'description' => trim(strip_tags($product->description)),
-                'category' => implode(",",$categories),
-                'sub_categories'=> implode(",",$sub_categories),
+                'category' => $join_cat,
                 'sku' => $sku,
                 'image_url' => $image_url,
                 'item_url' => get_permalink($product->id),
@@ -649,7 +686,7 @@ class CustomClientifyEndPoint {
             $table_name = is_null($cookie_cart_id->id_customer) || $cookie_cart_id->id_customer == '' ? 'cookie_cart_id' : 'id_customer';
             $carts = $wpdb->get_results('SELECT * FROM ' . $wpdb->prefix . 'cart where '. $table_name .' = "' . $id_contac . '"');		
             $items = array();
-
+            $total_price = 0;
 
             foreach ($carts as $cart_item_key => $cart_item) {
                 
@@ -665,10 +702,15 @@ class CustomClientifyEndPoint {
                     return false;
                 }
                 $product_id = $cart_item->id_product;
+                $categories = array();
+                $sub_categories= array();
                 $terms = get_the_terms($product_id, 'product_cat');
-
                 foreach ($terms as $term) {
-                    $product_cat = $term->name;
+                    if ($term->parent == 0){                    
+                        $categories[] = $term->term_id.":".$term->slug;
+                    }else{
+                        $sub_categories[] = $term->parent.":".$term->slug;
+                    }          
                 }
 
                 $cart_date = $cart_item->date_add;
@@ -682,14 +724,16 @@ class CustomClientifyEndPoint {
                 }
 
                 $price = $product->get_sale_price();
+                
                 if (empty($price)) {
-                    $price = $product->get_regular_price();
+                    $price = round($product->get_regular_price(), 2);
                 }	
-
+                $total_price += $price;
+                $join_cat = implode(",",$categories)."/".implode(",",$sub_categories);
                 $items[] = array(
                     'name' => $product->get_title(),
                     'description' => $product->get_description(),
-                    'category' => $product_cat,
+                    'category' => $join_cat,
                     'sku' => $product->get_sku(),
                     'image_url' => get_the_post_thumbnail_url($product_id),
                     'item_url' => $product->get_permalink($cart_item),
@@ -712,6 +756,7 @@ class CustomClientifyEndPoint {
                 'currency' => get_option('woocommerce_currency'),
                 'store_url' => $url_base,
                 'products' => $items,
+                'price'	=> $total_price,
                 'coupon' =>  0
             );
             if ($contact) {

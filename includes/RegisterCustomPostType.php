@@ -1,4 +1,3 @@
-
 <?php
 require_once plugin_dir_path(dirname(__FILE__)) . 'includes/Api.php';
 require_once plugin_dir_path(dirname(__FILE__)) . 'includes/ClientifyEndpoint.php';
@@ -521,6 +520,7 @@ class RegisterCustomPostType
 		$endpoint_class = new CustomClientifyEndPoint();
 		$product = wc_get_product( $product_id );
 		$url_base = $endpoint_class->GetApiUrl();
+		$new_categories = [];
 		$categories = array();
         $sub_categories= array();
 		$terms = get_the_terms($product_id, 'product_cat');
@@ -528,17 +528,28 @@ class RegisterCustomPostType
 			if ($term->parent == 0){                    
 				$categories[] = $term->term_id.":".$term->slug;
 			}else{
-				$sub_categories[] = $term->parent.":".$term->slug;
+				foreach ($categories as $cat ) {
+					$cat_data = explode(":",$cat);													
+					(int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
+				}
+				if(!$cat){
+					$term_search = get_term_by('id', $term->parent, 'product_cat');
+					$categories[] = $term_search->term_id.":".$term_search->slug;
+				}
+				$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
 			}          
 		}
-
 		$sku = $product->get_sku();
 		$image_id  = $product->get_image_id();
 		$image_url = wp_get_attachment_image_url($image_id, 'full');
 		$product_instance = wc_get_product($product_id);
 		$product_full_description = $product_instance->get_description();
 		$price = $product->price;
-
+		foreach($categories as $cat_clean){
+			if (!in_array($cat_clean, $new_categories))
+				$new_categories[] = $cat_clean;
+		}
+		$join_cat = implode(",",$new_categories)."/".implode(",",$sub_categories);
 		$item = array(
 			'status' => 'product',
 			'id' => $product_id,
@@ -547,8 +558,7 @@ class RegisterCustomPostType
 			'price' => $price == 0 ? 0 : $price,
 			'item_url' => get_permalink($product_id),
 			'currency' => get_option('woocommerce_currency'),
-			'category' => implode(",",$categories),
-            'sub_categories'=> implode(",",$sub_categories),
+			'category' => $join_cat,
 			'sku' => $sku,
 			'product_picture_url' => $image_url,
 			'store_url' => $url_base
@@ -576,7 +586,7 @@ class RegisterCustomPostType
 		return $all;
 		
 	}
-	function syncOrder($order_id, $status_transition_to, $that)
+	function syncOrder($order_id, $old_status, $new_status)
 	{
 		global $product;
 		global $wpdb;
@@ -585,8 +595,8 @@ class RegisterCustomPostType
 		//status of orden processin payment ...
 		// get type status in select front
 		$clientify_order_status = substr(get_option('CLIENTIFY_ORDER_STATUS'), 3);
-
-		if ($status_transition_to == $clientify_order_status) {
+		
+		if ($new_status == $clientify_order_status) {
 
 			$items = array();
 			$order = wc_get_order($order_id); //cn esto valido al llegar if
@@ -602,14 +612,22 @@ class RegisterCustomPostType
 
 				$categories = array();
 				$sub_categories= array();
+				$new_categories = [];
 				$terms = get_the_terms($order_product['product_id'], 'product_cat');
 				foreach ($terms as $term) {
-			
 					if ($term->parent == 0){                    
 						$categories[] = $term->term_id.":".$term->slug;
 					}else{
-						$sub_categories[] = $term->parent.":".$term->slug;
-					}                
+						foreach ($categories as $cat ) {
+							$cat_data = explode(":",$cat);													
+							(int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
+						}
+						if(!$cat){
+							$term_search = get_term_by('id', $term->parent, 'product_cat');
+							$categories[] = $term_search->term_id.":".$term_search->slug;
+						}
+						$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+					}          
 				}
 				$product = $order_product->get_product();
 				$sku = $product->get_sku();
@@ -621,28 +639,34 @@ class RegisterCustomPostType
 				$tax_amount = $order->get_item_tax($order_product, true, true);
 				$inc_tax = $tax_amount > 0 ? true : false;
 				$price = $product->get_sale_price();
-
+				$discount_price = floatval($order_product['subtotal']) - floatval($order_product['total']);
+				
+				
 				if ($inc_tax) {
 					$price = wc_get_price_including_tax($product, array('price' => $price));
 				} else {
 					$price = wc_get_price_excluding_tax($product, array('price' => $price));
 				}
-
+				foreach($categories as $cat_clean){
+					if (!in_array($cat_clean, $new_categories))
+						$new_categories[] = $cat_clean;
+				}  
+				$join_cat = implode(",",$new_categories)."/".implode(",",$sub_categories);
+				$discount = ($discount_price * 100) / $price;
 				$items[] = array(
 					'name' => $order_product->get_name(),
+					'id' => $product_id,
 					'description' => $product_full_description,
-					'category' => implode(",",$categories),
-					'sub_categories'=> implode(",",$sub_categories),
+					'category' => $join_cat,
 					'sku' => $sku,
 					'image_url' => $image_url,
 					'item_url' => get_permalink($order_product['product_id']),
 					'price' => $price,
 					'quantity' => $order_product->get_quantity(),
-					'discount' => 0, //$discount
+					'discount' => $discount != 0 ? $discount : 0, //$discount
 				);
+
 			}
-			//total discount
-			$order_discount_total = $order->get_total_discount(!$inc_tax);
 
 			$data = array(
 
@@ -658,25 +682,24 @@ class RegisterCustomPostType
 				'products' => $items,
 				'price'	=> $total_price,
 				//'visitor_key' => (string)$this->getVisitorKeyByCartId($_COOKIE['vk']),
-				'coupon' => $order_discount_total ? $order_discount_total : 0,
+				'coupon' => 0,
 			);
 			if (!empty($lang)) {
 				$data['custom_field'] = array(
 					'field' => 'ecommerce_language',
 					'value' => $lang,
 				);
-			}
-			
+			}		
 			
 			$api = new ClientifyApi;
 			$clientify_order = $api->Post_Order_Clientify($data);
+
 			
 			$res_cart_ac = $wpdb->get_row("SELECT * FROM {$wpdb->prefix}cart WHERE id_customer  = {$id_customer} ");
 			
 			if (!empty($clientify_order) && $res_cart_ac != '') {
 				$this->delete_cart($order_id);
 			}
-
 			return $clientify_order;
 		}
 	}
@@ -788,7 +811,7 @@ class RegisterCustomPostType
 		$table_name = is_null($cookie_cart_id->id_customer) || $cookie_cart_id->id_customer == '' ? 'cookie_cart_id' : 'id_customer';
 		$carts = $wpdb->get_results('SELECT * FROM ' . $wpdb->prefix . 'cart where '. $table_name .' = "' . $id_contac . '"');		
 		$items = array();
-		
+		$total_price = 0;
 		foreach ($carts as $cart_item_key => $cart_item) {
 			
 			$contact = null;
@@ -803,16 +826,22 @@ class RegisterCustomPostType
 				return false;
 			}
 			$product_id = $cart_item->id_product;
+			$categories = array();
+			$sub_categories= array();
 			$terms = get_the_terms($product_id, 'product_cat');
-
 			foreach ($terms as $term) {
-				$product_cat = $term->name;
+				if ($term->parent == 0){                    
+					$categories[] = $term->term_id.":".$term->slug;
+				}else{
+					$sub_categories[] = $term->parent.":".$term->slug;
+				}          
 			}
 
 			$cart_date = $cart_item->date_add;
 			$product = wc_get_product($product_id);
 
 			$price = $product->get_price();
+			$total_price += $price;
 			$without_reduction = $product->get_regular_price();
 			$discount = $without_reduction - $price;
 			if ($discount) {
@@ -823,11 +852,12 @@ class RegisterCustomPostType
 			if (empty($price)) {
 				$price = $product->get_regular_price();
 			}	
+			$join_cat = implode(",",$categories)."/".implode(",",$sub_categories);
 
 			$items[] = array(
 				'name' => $product->get_title(),
 				'description' => $product->get_description(),
-				'category' => $product_cat,
+				'category' => $join_cat,
 				'sku' => $product->get_sku(),
 				'image_url' => get_the_post_thumbnail_url($product_id),
 				'item_url' => $product->get_permalink($cart_item),
@@ -848,6 +878,7 @@ class RegisterCustomPostType
 			'currency' => get_option('woocommerce_currency'),
 			'store_url' => $url_base,
 			'products' => $items,
+			'price'	=> $total_price,
 			'coupon' =>  0
 		);
 		if ($contact) {
@@ -1026,4 +1057,3 @@ class RegisterCustomPostType
 	// 	//return json_encode($data);
 	// }
 }
-

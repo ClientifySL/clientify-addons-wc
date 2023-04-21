@@ -157,7 +157,7 @@ jQuery(document).ready(function () {
 									btnconnect.attr("disabled", true).text("Conectado").addClass('connected');
 									 form.submit();
 									$("#key").focus();
-									var win = window.open(api+'ecommerce/settingsv2/list-store/woocommerce', '_blank');
+									var win = window.open('http://app.clientify.com/ecommerce/settingsv2/list-store/woocommerce', '_blank');
 									//$(location).attr('href', 'https://ecommerce.ngrok.io/ecommerce/settingsv2/list-store/woocommerce')
 									
 								}

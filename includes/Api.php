@@ -5,14 +5,15 @@ if (!class_exists('ClientifyApi')) {
     {
         var $api_key;
 
-        var $api_url = 'https://staging.clientify.net/';
+        var $api_url = 'https://api.clientify.com/';
+        // var $api_url = 'https://ecommerce.ngrok.io/';
 
         public function __construct()
         {
             $this->api_key = get_option('CLIENTIFY_API_KEY');
         }
         public function Post_Base_Clientify($data,$key)
-        {   
+        {
             $curl = curl_init();
             curl_setopt_array($curl, array(
                 CURLOPT_URL => $this->api_url . 'ecommerce/v2/connection_by_plugin/',

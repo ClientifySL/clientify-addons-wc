@@ -25,7 +25,7 @@
  * @since      1.0.0
  * @package    Clientify_Addons
  * @subpackage Clientify_Addons/includes
- * @author     Emerson Ramirez <ramirezemerson1991@gmail.com>
+ * @author     Clientify
  */
 class Clientify_Addons {
 
@@ -214,8 +214,8 @@ class Clientify_Addons {
 			$this->loader->add_action('wp_footer', $register_custom_post_type, 'clientify_api_script');
 			$this->loader->add_action('user_register', $register_custom_post_type, 'customer_add', 10, 1 );
 			$this->loader->add_action('woocommerce_order_status_changed', $register_custom_post_type,'syncOrder', 10, 3);
-			$this->loader->add_action('woocommerce_update_product', $register_custom_post_type,'productPublished', 10, 1);
-			$this->loader->add_action('woocommerce_new_product', $register_custom_post_type,'productPublished', 10, 1);
+			$this->loader->add_action('woocommerce_update_product', $register_custom_post_type,'productPublished', 5, 1);
+			$this->loader->add_action('woocommerce_new_product', $register_custom_post_type,'productPublished', 5, 1);
 			/* Abandoned Cart Process*/	
 			$this->loader->add_action('woocommerce_add_to_cart', $register_custom_post_type,'clientify_save_add_to_cart', 10, 2);
 			$this->loader->add_action('woocommerce_update_cart_action_cart_updated',$register_custom_post_type, 'clientify_cart_updated', 20, 1);
@@ -304,8 +304,8 @@ class Clientify_Addons {
 	}
 	public function get_option_name()
 	{
-
-		return $this->option_name;
+		return false;
+		//return $this->option_name;
 	}
 
 }
