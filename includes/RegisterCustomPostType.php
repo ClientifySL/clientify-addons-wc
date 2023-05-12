@@ -24,7 +24,7 @@ class RegisterCustomPostType
 		register_setting('clientify-settings-group', 'CLIENTIFY_API_LOG');
 		register_setting('clientify-settings-group', 'CLIENTIFY_SCRIPT');
 		register_setting('clientify-settings-group', 'CLIENTIFY_BOTTOM_SCRIPT');
-		register_setting('clientify-settings-group', 'CLIENTIFY_ORDER_STATUS');
+		register_setting('clientify-settings-status-order', 'CLIENTIFY_ORDER_STATUS');
 
 		register_setting('clientify-settings-group', 'CLIENTIFY_CART_HOUR', 6);
 		register_setting('clientify-settings-store', 'CLIENTIFY_STORE_KEY');
@@ -71,8 +71,8 @@ class RegisterCustomPostType
 	{
 
 		$key = $_POST['apikey'] !=	'' ? $_POST['apikey'] : get_option('CLIENTIFY_API_KEY');
-
 		if ($_POST['apikey'] != '' || get_option('CLIENTIFY_API_KEY') != '') {
+			update_option('CLIENTIFY_ORDER_STATUS', $_POST['order_process']);
 			/* generate uid key for connect to clientify */
 			$endpoint_class = new CustomClientifyEndPoint();
 			$api = new ClientifyApi;
@@ -107,6 +107,7 @@ class RegisterCustomPostType
             if ($status == 'success') {
     
 				update_option('CLIENTIFY_STATUS', 1);
+				
             }
         }
 
@@ -321,8 +322,6 @@ class RegisterCustomPostType
 		return $clientify_id;
 	}
 	/* END contacs seccition  */
-
-
 	/* customer Secction*/
 
 	//Hook register user in woocomece
@@ -512,7 +511,6 @@ class RegisterCustomPostType
 		}
 		return $contact;
 	}
-
 	/* END Sync customer Secction*/
 	/* products */
 	function productPublished($product_id){
@@ -525,18 +523,34 @@ class RegisterCustomPostType
         $sub_categories= array();
 		$terms = get_the_terms($product_id, 'product_cat');
 		foreach ($terms as $term) {
-			if ($term->parent == 0){                    
+			if ($term->parent == 0){                                           
 				$categories[] = $term->term_id.":".$term->slug;
 			}else{
 				foreach ($categories as $cat ) {
 					$cat_data = explode(":",$cat);													
 					(int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
 				}
-				if(!$cat){
+				if(!$cat){                            
 					$term_search = get_term_by('id', $term->parent, 'product_cat');
-					$categories[] = $term_search->term_id.":".$term_search->slug;
+					if($term_search->parent == 0){
+						$categories[] = $term_search->term_id.":".$term_search->slug;
+					}
+					else{
+						$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
+					}                            
 				}
-				$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+				if (!in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories)) {
+						$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+					}
+				foreach ($categories as $key => $value) {                            
+					foreach($sub_categories as $key => $value_sub){
+						$explode = explode("|", $value_sub);
+						$arr = array($explode[0]);
+						if (in_array($value, $arr)) {
+						unset($categories[$key]);
+						}
+					}                            
+				  }                        
 			}          
 		}
 		$sku = $product->get_sku();
@@ -545,6 +559,15 @@ class RegisterCustomPostType
 		$product_instance = wc_get_product($product_id);
 		$product_full_description = $product_instance->get_description();
 		$price = $product->price;
+
+		$regular_price = $product->get_regular_price(); // Obtiene el precio regular del producto
+		$sale_price = $product->get_sale_price(); // Obtiene el precio de venta del producto
+		if ( $sale_price != $regular_price && $sale_price != '' ) {
+			$price = $sale_price;
+		} else {
+			$price = $regular_price;
+		}
+
 		foreach($categories as $cat_clean){
 			if (!in_array($cat_clean, $new_categories))
 				$new_categories[] = $cat_clean;
@@ -563,8 +586,6 @@ class RegisterCustomPostType
 			'product_picture_url' => $image_url,
 			'store_url' => $url_base
 		);
-
-
 		$api = new ClientifyApi;
 		$clientify_product = $api->Post_Product_Clientify($item);
 
@@ -575,15 +596,15 @@ class RegisterCustomPostType
 		$all = array();
 		$product = wc_get_product( $product_id );
 	
-	$product_data = $product->get_data();
-	$category_ids = $product_data['category_ids'];
-	foreach ($category_ids as $category_id){
-		$term_object = get_term_by('id', $category_id, 'product_cat');
-		$category_name = $term_object->name;
-		$category_link = get_category_link($category_id);
-		list($all) = $category_name;
-	}
-		return $all;
+		$product_data = $product->get_data();
+		$category_ids = $product_data['category_ids'];
+		foreach ($category_ids as $category_id){
+			$term_object = get_term_by('id', $category_id, 'product_cat');
+			$category_name = $term_object->name;
+			$category_link = get_category_link($category_id);
+			list($all) = $category_name;
+		}
+			return $all;
 		
 	}
 	function syncOrder($order_id, $old_status, $new_status)
@@ -594,114 +615,133 @@ class RegisterCustomPostType
 		$url_base = $endpoint_class->GetApiUrl();
 		//status of orden processin payment ...
 		// get type status in select front
-		$clientify_order_status = substr(get_option('CLIENTIFY_ORDER_STATUS'), 3);
+		$clientify_order_status = get_option('CLIENTIFY_ORDER_STATUS');
+
+		foreach ($clientify_order_status as $key => $order_status) :
+			if (in_array($key, $clientify_order_status)) { 	
+
+				$items = array();
+				$order = wc_get_order($order_id); //cn esto valido al llegar if
+				$order_status  = $order->get_status();
+				$order_data = $order->get_data();
+				$id_customer = $order->get_customer_id();
+				$total_price = $order->get_total();
+				$lang = get_bloginfo("language");
+				$products = $order->get_items();
+				$currency = $order->get_currency();
+
+				foreach ($products as $order_product) {
+
+					$categories = array();
+					$sub_categories= array();
+					$new_categories = [];
+					$terms = get_the_terms($order_product['product_id'], 'product_cat');
+					foreach ($terms as $term) {
+						if ($term->parent == 0){                                           
+							$categories[] = $term->term_id.":".$term->slug;
+						}else{
+							foreach ($categories as $cat ) {
+								$cat_data = explode(":",$cat);													
+								(int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
+							}
+							if(!$cat){                            
+								$term_search = get_term_by('id', $term->parent, 'product_cat');
+								if($term_search->parent == 0){
+									$categories[] = $term_search->term_id.":".$term_search->slug;
+								}
+								else{
+									$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
+								}                            
+							}
+							if (!in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories)) {
+									$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+								}
+							foreach ($categories as $key => $value) {                            
+								foreach($sub_categories as $key => $value_sub){
+									$explode = explode("|", $value_sub);
+									$arr = array($explode[0]);
+									if (in_array($value, $arr)) {
+									unset($categories[$key]);
+									}
+								}                            
+							}                        
+						}          
+					}
+					$product = $order_product->get_product();
+					$sku = $product->get_sku();
+					$image_id  = $product->get_image_id();
+					$image_url = wp_get_attachment_image_url($image_id, 'full');
+					$product_id = $order_product['product_id'];
+					$product_instance = wc_get_product($product_id);
+					$product_full_description = $product_instance->get_description();
+					$tax_amount = $order->get_item_tax($order_product, true, true);
+					$inc_tax = $tax_amount > 0 ? true : false;
+					$price = $product->get_sale_price();
+					$discount_price = floatval($order_product['subtotal']) - floatval($order_product['total']);
+					
+					
+					if ($inc_tax) {
+						$price = wc_get_price_including_tax($product, array('price' => $price));
+					} else {
+						$price = wc_get_price_excluding_tax($product, array('price' => $price));
+					}
+					foreach($categories as $cat_clean){
+						if (!in_array($cat_clean, $new_categories))
+							$new_categories[] = $cat_clean;
+					}  
+					$join_cat = implode(",",$new_categories)."/".implode(",",$sub_categories);
+					$discount = ($discount_price * 100) / $price;
+					$items[] = array(
+						'name' => $order_product->get_name(),
+						'id' => $product_id,
+						'description' => $product_full_description,
+						'category' => $join_cat,
+						'sku' => $sku,
+						'image_url' => $image_url,
+						'item_url' => get_permalink($order_product['product_id']),
+						'price' => $price,
+						'quantity' => $order_product->get_quantity(),
+						'discount' => $discount != 0 ? $discount : 0, //$discount
+					);
+
+				}
+
+				$data = array(
+
+					'contact' => $this->Get_contact($id_customer),
+					'status' => 'ordered',
+					'order_date' => $order_data['date_created']->date('Y-m-d H:i:s'),
+					'order_id' => $order->get_id(),
+					'ecommerce' => 'woocommerce',
+					'shop_name' => get_option('blogname'),
+					'order_url' => $order->get_view_order_url(),
+					'store_url' => $url_base,
+					'currency' => $currency,
+					'products' => $items,
+					'price'	=> $total_price,
+					//'visitor_key' => (string)$this->getVisitorKeyByCartId($_COOKIE['vk']),
+					'coupon' => 0,
+				);
+				if (!empty($lang)) {
+					$data['custom_field'] = array(
+						'field' => 'ecommerce_language',
+						'value' => $lang,
+					);
+				}		
+				
+				$api = new ClientifyApi;
+				$clientify_order = $api->Post_Order_Clientify($data);
+
+				
+				$res_cart_ac = $wpdb->get_row("SELECT * FROM {$wpdb->prefix}cart WHERE id_customer  = {$id_customer} ");
+				
+				if (!empty($clientify_order) && $res_cart_ac != '') {
+					$this->delete_cart($order_id);
+				}
+				return $clientify_order;
 		
-		if ($new_status == $clientify_order_status) {
-
-			$items = array();
-			$order = wc_get_order($order_id); //cn esto valido al llegar if
-			$order_status  = $order->get_status();
-			$order_data = $order->get_data();
-			$id_customer = $order->get_customer_id();
-			$total_price = $order->get_total();
-			$lang = get_bloginfo("language");
-			$products = $order->get_items();
-			$currency = $order->get_currency();
-
-			foreach ($products as $order_product) {
-
-				$categories = array();
-				$sub_categories= array();
-				$new_categories = [];
-				$terms = get_the_terms($order_product['product_id'], 'product_cat');
-				foreach ($terms as $term) {
-					if ($term->parent == 0){                    
-						$categories[] = $term->term_id.":".$term->slug;
-					}else{
-						foreach ($categories as $cat ) {
-							$cat_data = explode(":",$cat);													
-							(int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
-						}
-						if(!$cat){
-							$term_search = get_term_by('id', $term->parent, 'product_cat');
-							$categories[] = $term_search->term_id.":".$term_search->slug;
-						}
-						$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
-					}          
-				}
-				$product = $order_product->get_product();
-				$sku = $product->get_sku();
-				$image_id  = $product->get_image_id();
-				$image_url = wp_get_attachment_image_url($image_id, 'full');
-				$product_id = $order_product['product_id'];
-				$product_instance = wc_get_product($product_id);
-				$product_full_description = $product_instance->get_description();
-				$tax_amount = $order->get_item_tax($order_product, true, true);
-				$inc_tax = $tax_amount > 0 ? true : false;
-				$price = $product->get_sale_price();
-				$discount_price = floatval($order_product['subtotal']) - floatval($order_product['total']);
-				
-				
-				if ($inc_tax) {
-					$price = wc_get_price_including_tax($product, array('price' => $price));
-				} else {
-					$price = wc_get_price_excluding_tax($product, array('price' => $price));
-				}
-				foreach($categories as $cat_clean){
-					if (!in_array($cat_clean, $new_categories))
-						$new_categories[] = $cat_clean;
-				}  
-				$join_cat = implode(",",$new_categories)."/".implode(",",$sub_categories);
-				$discount = ($discount_price * 100) / $price;
-				$items[] = array(
-					'name' => $order_product->get_name(),
-					'id' => $product_id,
-					'description' => $product_full_description,
-					'category' => $join_cat,
-					'sku' => $sku,
-					'image_url' => $image_url,
-					'item_url' => get_permalink($order_product['product_id']),
-					'price' => $price,
-					'quantity' => $order_product->get_quantity(),
-					'discount' => $discount != 0 ? $discount : 0, //$discount
-				);
-
 			}
-
-			$data = array(
-
-				'contact' => $this->Get_contact($id_customer),
-				'status' => 'ordered',
-				'order_date' => $order_data['date_created']->date('Y-m-d H:i:s'),
-				'order_id' => $order->get_id(),
-				'ecommerce' => 'woocommerce',
-				'shop_name' => get_option('blogname'),
-				'order_url' => $order->get_view_order_url(),
-				'store_url' => $url_base,
-				'currency' => $currency,
-				'products' => $items,
-				'price'	=> $total_price,
-				//'visitor_key' => (string)$this->getVisitorKeyByCartId($_COOKIE['vk']),
-				'coupon' => 0,
-			);
-			if (!empty($lang)) {
-				$data['custom_field'] = array(
-					'field' => 'ecommerce_language',
-					'value' => $lang,
-				);
-			}		
-			
-			$api = new ClientifyApi;
-			$clientify_order = $api->Post_Order_Clientify($data);
-
-			
-			$res_cart_ac = $wpdb->get_row("SELECT * FROM {$wpdb->prefix}cart WHERE id_customer  = {$id_customer} ");
-			
-			if (!empty($clientify_order) && $res_cart_ac != '') {
-				$this->delete_cart($order_id);
-			}
-			return $clientify_order;
-		}
+		endforeach;
 	}
 	/* END Sync Orders Secction*/
 	function clientify_api_script(){
@@ -830,13 +870,36 @@ class RegisterCustomPostType
 			$sub_categories= array();
 			$terms = get_the_terms($product_id, 'product_cat');
 			foreach ($terms as $term) {
-				if ($term->parent == 0){                    
+				if ($term->parent == 0){                                           
 					$categories[] = $term->term_id.":".$term->slug;
 				}else{
-					$sub_categories[] = $term->parent.":".$term->slug;
+					foreach ($categories as $cat ) {
+						$cat_data = explode(":",$cat);													
+						(int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
+					}
+					if(!$cat){                            
+						$term_search = get_term_by('id', $term->parent, 'product_cat');
+						if($term_search->parent == 0){
+							$categories[] = $term_search->term_id.":".$term_search->slug;
+						}
+						else{
+							$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
+						}                            
+					}
+					if (!in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories)) {
+							$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+						}
+					foreach ($categories as $key => $value) {                            
+						foreach($sub_categories as $key => $value_sub){
+							$explode = explode("|", $value_sub);
+							$arr = array($explode[0]);
+							if (in_array($value, $arr)) {
+							unset($categories[$key]);
+							}
+						}                            
+					  }                        
 				}          
 			}
-
 			$cart_date = $cart_item->date_add;
 			$product = wc_get_product($product_id);
 

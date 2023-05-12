@@ -109,7 +109,8 @@ class Clientify_Addons_Activator
         /* set default time Abandoned Card  */
         update_option('CLIENTIFY_STATUS', 0);
         update_option('CLIENTIFY_CART_HOUR', 6);
-        update_option('CLIENTIFY_ORDER_STATUS', 'wc-completed');
+        $order_status = array("wc-completed", "wc-processing");
+        update_option('CLIENTIFY_ORDER_STATUS', $order_status);
 
         function myprefix_custom_cron_schedule($schedules)
         {

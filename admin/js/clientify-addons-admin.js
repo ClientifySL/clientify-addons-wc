@@ -36,7 +36,9 @@ document.addEventListener('keyup', (event) => {
 		setTimeout(function(){ $('#other_config').hide(1000) }, 10000);
 	});
 jQuery(document).ready(function () {
-		//botton update key api
+	$("#CLIENTIFY_ORDER_STATUS_names").select2({
+		maximumSelectionLength: 5
+	  });
 	// var storeKey = $('#storekey');
 	// var updateStoreKey = $('#updateStoreKey');
 	
@@ -103,6 +105,7 @@ jQuery(document).ready(function () {
 		var btnconnect = jQuery(this);
 		var form = $('#api-form-settings');
 		var apikey = $("#key").val();
+		var orderProcess = $("#CLIENTIFY_ORDER_STATUS_names").val();
 		var api = $("#api").val();
 		var res = 0;
 		btnconnect.attr("disabled", true).text(btnconnect.data("loading-text"));
@@ -121,6 +124,7 @@ jQuery(document).ready(function () {
 				data: {
 					action: "connect_clientify",
 					'apikey': apikey,
+					'order_process': orderProcess,
 				},
 				success: function(response) {
 					//toke_val = typeof response.detail == "undefined";
@@ -155,7 +159,7 @@ jQuery(document).ready(function () {
 								if (res.data['status'] == 'success') {
 									statusMessage('Conexión Clientify Exitosa','success');
 									btnconnect.attr("disabled", true).text("Conectado").addClass('connected');
-									 form.submit();
+									form.submit();
 									$("#key").focus();
 									var win = window.open('http://app.clientify.com/ecommerce/settingsv2/list-store/woocommerce', '_blank');
 									//$(location).attr('href', 'https://ecommerce.ngrok.io/ecommerce/settingsv2/list-store/woocommerce')

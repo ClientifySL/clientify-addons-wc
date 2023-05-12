@@ -14,7 +14,6 @@ function clientify_settings_page()
 	<input type="hidden" id="api" name="api" value="<?php echo $api->api_url; ?>">
 		<header>
 			<img src="../wp-content/plugins/clientify-addons-wc/public/img/clientify.svg" alt="Clientify" class="logo-clientify-responsive">
-			<!-- <h1>Clientify <span>with Forms</span></h1> -->
 			<p>Gestiona y automatiza tu Marketing y Ventas fácilmente.</p>
 		</header>
 		<nav class="nav-tab-wrapper">
@@ -83,18 +82,20 @@ function clientify_settings_page()
 							</div>
 						</div> -->
 						<div class="controls">
-							<?php $order_statuses_clientify = wc_get_order_statuses(); ?>
-
-							<select name="CLIENTIFY_ORDER_STATUS" id="CLIENTIFY_ORDER_STATUS" class="floatLabel">
+							<?php 
+							$order_statuses_clientify = wc_get_order_statuses(); 
+							$selected_options = get_option('CLIENTIFY_ORDER_STATUS');
+							?>
+							<select name="CLIENTIFY_ORDER_STATUS_names" id="CLIENTIFY_ORDER_STATUS_names" multiple="multiple" class="floatLabel">								
 								<?php foreach ($order_statuses_clientify as $key => $order_status) : ?>
-									<option value="<?php echo $key ?>" <?php if (get_option('CLIENTIFY_ORDER_STATUS') == $key) { ?> selected <?php } ?>>
-										<?php echo $order_status ?>
-									</option>
-								<?php endforeach; ?>
+									<option value="<?php echo $key; ?>" <?php if (in_array($key, $selected_options)) { echo 'selected'; } ?>><?php echo $order_status; ?></option>
+								<?php endforeach; 
+								 ?>
 							</select>
-							<label for="orderstatus"><?php _e('Order Status', 'clientify'); ?></label>
+							<label for="orderstatus" class="orderlabel" style="top: -20px !important;color: #555 !important;background-color: white !important;">
+							<?php _e('Order Status', 'clientify'); ?></label>
 						</div>
-
+						<br>
 						<div class="controls">
 							<select name="CLIENTIFY_CART_HOUR" id="CLIENTIFY_CART_HOUR" class="floatLabel">
 								<option value="">

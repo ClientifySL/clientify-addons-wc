@@ -73,6 +73,8 @@ class Clientify_Addons_Admin {
 		 * class.
 		 */
 		wp_enqueue_style( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'css/clientify-addons-admin.css', array(), $this->version, 'all' );
+		wp_enqueue_style( 'select2', plugin_dir_url( __FILE__ ).'css/select2.min.css' , array(), $this->version, 'all');
+
 
 
 	}
@@ -99,7 +101,7 @@ class Clientify_Addons_Admin {
 		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/clientify-addons-admin.js', array( 'jquery' ), $this->version, false );
 		$base_path = $_SERVER['DOCUMENT_ROOT'] . '/wp-content/plugins/clientify-addons-wc/admin/';
         wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/clientify-addons-admin.js', array( 'jquery' ), filemtime( $base_path . 'js/clientify-addons-admin.js'), false );
-		//wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/clientify-addons-admin.js', array( 'jquery' ), filemtime( $base_path . 'js/sync-customer.js'), false );
+		wp_enqueue_script( 'select2', plugin_dir_url( __FILE__ ) . 'js/select2.min.js' , array( 'jquery' ), '4.0.3', true );
 
 
 	}
