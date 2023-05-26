@@ -1,7 +1,7 @@
 <?php
-if (!class_exists('ClientifyApi')) {
-    require_once plugin_dir_path(dirname(__FILE__)) . 'includes/RegisterCustomPostType.php';
-    class ClientifyApi
+if (!class_exists('Clientify_Api')) {
+    require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class_clientify_plugin_core.php';
+    class Clientify_Api
     {
         var $api_key;
 
@@ -12,7 +12,7 @@ if (!class_exists('ClientifyApi')) {
         {
             $this->api_key = get_option('CLIENTIFY_API_KEY');
         }
-        public function Post_Base_Clientify($data,$key)
+        public function post_base_clientify($data,$key)
         {
             $curl = curl_init();
             curl_setopt_array($curl, array(
@@ -32,7 +32,7 @@ if (!class_exists('ClientifyApi')) {
             return json_decode($response);
         }
 
-        public function Get_Api($end_point)
+        public function get_api($end_point)
         {
             $curl = curl_init();
             curl_setopt_array($curl, array(
@@ -51,7 +51,7 @@ if (!class_exists('ClientifyApi')) {
             return $response;
         }
 
-        public function Post_Contacts_Clientify($data)
+        public function post_contacts_clientify($data)
         {
             $curl = curl_init();
             curl_setopt_array($curl, array(
@@ -71,7 +71,7 @@ if (!class_exists('ClientifyApi')) {
             return json_decode($response);
         }
 
-        public function Post_Order_Clientify($data)
+        public function post_order_clientify($data)
         {
             $curl = curl_init();
             curl_setopt_array($curl, array(
@@ -91,7 +91,7 @@ if (!class_exists('ClientifyApi')) {
             return json_decode($response);
         }
 
-        public function Post_Product_Clientify($data)
+        public function post_product_plientify($data)
         {
             $curl = curl_init();
             curl_setopt_array($curl, array(

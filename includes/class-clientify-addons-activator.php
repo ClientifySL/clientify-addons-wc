@@ -123,11 +123,9 @@ class Clientify_Addons_Activator
         add_filter('cron_schedules', 'myprefix_custom_cron_schedule');
 
         //Schedule an action if it's not already scheduled
-        if (!wp_next_scheduled('clientify_job')) {
+        if ( !wp_next_scheduled('clientify_job') ) {
             wp_schedule_event(current_time('timestamp'), 'hourly', 'clientify_job');
         }
-
-
     }
 
     

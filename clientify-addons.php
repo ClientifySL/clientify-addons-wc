@@ -10,10 +10,10 @@
  *
  * @link              Clientify SL
  * @since             1.0.0
- * @package           Clientify-ecommerce
+ * @package           Clientify-Ecommerce
  *
  * @wordpress-plugin
- * Plugin Name:       Clientify-ecommerce
+ * Plugin Name:       Clientify-Ecommerce
  * Plugin URI:        http://clientify.com/
  * Description:       Conecta woocommerce con Clientify para automatizar el marketing de tu tienda online.
  * Version:           1.0.0
