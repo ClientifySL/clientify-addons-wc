@@ -423,7 +423,14 @@ class Clientify_Endpoint {
         $site_name = get_option('blogname');
         $site_name = empty($site_name) ? 'WordPress' : $site_name;
         $customer = new WC_Customer($user_id);
-
+        $meta_keys = array('shipping_nif', 'vat_number', 'dni_number');
+        $customer_dni = '';
+        foreach ( $meta_keys as $meta_key ) {
+            $meta_value = get_user_meta($user_id, $meta_key, true);
+            if (!empty($meta_value) ) {
+                $customer_dni = $meta_value;
+            }
+        }
 
         if ( $user_id != 0 ) {
             $data = array(
@@ -431,6 +438,7 @@ class Clientify_Endpoint {
                 'email'           => $customer->email,
                 'contact_source'  => get_option('blogname'),
                 'user_registered' => $user->user_registered,
+                'identification'  => $customer_dni,
                 'custom_fields'   => [],
                 'tags'            => array(
                                         'WooCommerce',
@@ -501,7 +509,6 @@ class Clientify_Endpoint {
 
             }
         }
-
         return $data;
     }
     /* get products */

@@ -4,18 +4,30 @@ require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-clientify-endp
 
 class Clientify_Plugin_Core
 {
-	// create custom plugin settings menu
-
+		/**
+	 * clientify_create_menu Add option menu admin page WordPress.
+	 *
+	 * @since    1.0.0
+	 */
 	function clientify_create_menu()
 	{
 		add_menu_page('Clientify', 'Clientify', 'administrator', __FILE__, 'clientify_settings_page', plugins_url('../public/img/logo.png', __FILE__));
 	}
+		/**
+	 * Add config page in admin panel WordPress.
+	 *
+	 * @since    1.0.0
+	 */
 	public function clientify_index()
 	{
 		/* include admin view */
 		include plugin_dir_path(dirname(__FILE__)) . 'admin/clientify-admin-page.php';
 	}
-
+	/**
+	 * Define a global config parameters for clientify.
+	 *
+	 * @since    1.0.0
+	 */
 	public function clientify_settings()
 	{
 		//register our settings
@@ -28,8 +40,11 @@ class Clientify_Plugin_Core
 		register_setting('clientify-settings-store', 'CLIENTIFY_STORE_KEY');
 		register_setting('clientify-settings-status', 'CLIENTIFY_STATUS' , 0);
 	}
-
-	//sync abandoned cart
+	/**
+	 * Check if there any abandoned carts.
+	 *
+	 * @since    1.0.0
+	 */
 	function clientify_action_init()
 	{
 		global $wpdb;
@@ -46,8 +61,12 @@ class Clientify_Plugin_Core
 			}
 		}
 	}
-	// END create custom plugin settings menu
-	/* Connect and Disconnect bridge wicht clientify */
+	/**
+	 * Send parameters to Connect plugin with clientify.
+	 *
+	 * @since    1.0.0
+	 *
+	 */
 	function connect_clientify()
 	{
 		$key = $_POST['apikey'] !=	'' ? $_POST['apikey'] : get_option('CLIENTIFY_API_KEY');
@@ -90,7 +109,11 @@ class Clientify_Plugin_Core
 		echo  json_encode($response);
 		die();
 	}
-
+	/**
+	 * Send parameters to Unlink with clientify.
+	 *
+	 * @since    1.0.0
+	 */
 	function disconnect_clientify()
 	{
 		$key = $_POST['apikey'] !=	'' ? $_POST['apikey'] : get_option('CLIENTIFY_API_KEY');
@@ -120,9 +143,12 @@ class Clientify_Plugin_Core
 		echo  json_encode($response);
 		die();
 	}
-	/* END Connect and Disconnect bridge wicht clientify */
-
-	/* contacs seccition  */
+	/**
+	 * Query contact by Id in Wocommerce.
+	 *
+	 * @since    1.0.0
+	 * @param    int                  $user_id    The custommer's id number.
+	 */
 	function get_contact($user_id)
 	{
 		global $wpdb;
@@ -136,7 +162,14 @@ class Clientify_Plugin_Core
 		$site_name = get_option('blogname');
 		$site_name = empty($site_name) ? 'WordPress' : $site_name;
 		$customer = new WC_Customer($user_id);
-		//$contact = $this->get_contact_by_customer_id($user_id, true);
+		$meta_keys = array('shipping_nif', 'vat_number', 'dni_number');
+        $customer_dni = '';
+        foreach ( $meta_keys as $meta_key ) {
+            $meta_value = get_user_meta($user_id, $meta_key, true);
+            if (!empty($meta_value) ) {
+                $customer_dni = $meta_value;
+            }
+        }
 
 		if ( $user_id != 0 ) {
 			$data = array(
@@ -144,6 +177,7 @@ class Clientify_Plugin_Core
 				'email'       	  => $customer->email,
 				'contact_source'  => get_option('blogname'),
 				'user_registered' => $user->user_registered,
+				'identification'  => $customer_dni,
 				'custom_fields'   => [],
 				'tags'            => array(
 										'woocommerce',
@@ -211,57 +245,24 @@ class Clientify_Plugin_Core
 		}
 		return $data;
 	}
-
-	function get_contact_by_customer_id($id_customer, $update = false)
-	{
-		global $wpdb;
-		if ( is_plugin_active('woocommerce/woocommerce.php') ) {
-			$clientify_id = $wpdb->get_var('SELECT clientify_id FROM ' . $wpdb->prefix . 'clientify_customer WHERE id_customer = ' . (int)$id_customer);
-			if ( !$clientify_id ) {
-				$contact = $this->sync_hook_customer( $id_customer );
-				if ( isset($contact->id) && $contact->id ) {
-					$clientify_id = $contact->id;
-				}
-			} elseif ( $update ) {
-				$this->sync_hook_customer( $id_customer );
-			}
-		}
-		return $clientify_id;
-	}
-	/* END contacs seccition  */
-	/* customer Secction*/
-
-	//Hook register user in woocomece
+	/**
+	 * Check Wocommerce is activate.
+	 *
+	 * @since    1.0.0
+	 * @param    int                  $user_id    The custommer's id number.
+	 */
 	function customer_add($user_id)
 	{
 		if ( is_plugin_active('woocommerce/woocommerce.php') && !is_admin() ) {
 			$this->sync_hook_customer( $user_id );
 		}
 	}
-	//hook cart wc
-	function customer_update_address_for_orders($user_id)
-	{
-		$this->sync_hook_customer( $user_id );
-	}
-	/* END Customer */
-	//!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	/* Sync customer Secction*/
-	function sync_customer()
-	{
-		global $wpdb;
-		$sql = 'SELECT c.ID FROM ' . $wpdb->prefix . 'users c LEFT JOIN ' . $wpdb->prefix . 'clientify_customer cc ON (c.ID = cc.id_customer) WHERE cc.id_customer IS NULL';
-		$customers_to_sync = $wpdb->get_results( $sql );
-		$count = 0;
-		foreach ( $customers_to_sync as $customer_to_sync ) {
-			$customer = $this->sync_hook_customer( $customer_to_sync->ID );
-			if ( isset($customer->id) ) {
-				$count++;
-			}
-		}
-		echo json_encode( array('count' => $count) );
-		die();
-	}
-	//Syns Users local sync to clientify
+	/**
+	 * Send customer information to the clientify api.
+	 *
+	 * @since    1.0.0
+	 * @param    int                  $user_id    The custommer's id number.
+	 */
 	function sync_hook_customer( $user_id )
 	{
 		global $wpdb;
@@ -407,8 +408,12 @@ class Clientify_Plugin_Core
 		}
 		return $contact;
 	}
-	/* END Sync customer Secction*/
-	/* products */
+	/**
+	 * search and send product data to the clientify api.
+	 *
+	 * @since    1.0.0
+	 * @param    int                  $prodcut_id    The product's id number.
+	 */
 	function product_published($product_id){
 
 		$endpoint_class = new Clientify_Endpoint();
@@ -486,7 +491,15 @@ class Clientify_Plugin_Core
 		$clientify_product = $api->post_product_plientify( $item );
 		return $clientify_product;
 	}
-
+	/**
+	 * Collects and sorts data from an order by executing hook woocommerce_order_status_changed or 
+	 * woocommerce_thankyou, and sends to clientify.
+	 *
+	 * @since    1.0.0
+	 * @param    int                  $order_id    The order id number.
+	 * @param    string               $old_status    The old staus.
+	 * @param    string               $new_status    The new status.
+	 */
 	function sync_hook_order($order_id, $old_status, $new_status)
 	{
 		global $product;
@@ -618,7 +631,11 @@ class Clientify_Plugin_Core
 			}
 		endforeach;
 	}
-	/* END Sync Orders Secction*/
+		/**
+	 * Insert script for analitycs of clientify in the wp_footer hook
+	 *
+	 * @since    1.0.0
+	 */
 	function clientify_api_script(){
 
 		$bottom_script = get_option('CLIENTIFY_SCRIPT');
@@ -626,7 +643,12 @@ class Clientify_Plugin_Core
 			printf("<script src='%s'></script>",esc_attr($bottom_script));
 		}
 	}
-	/*  ABANDON CART FUNTIONS  */
+	/**
+	 * Insert product id carts table to track abandoned carts
+	 *
+	 * @since    1.0.0
+	 * @param    int                  $prodcut_id    The product id number.
+	 */
 	function clientify_save_add_to_cart($cart_item_key, $product_id)
 	{
 		global $wpdb;
@@ -658,14 +680,25 @@ class Clientify_Plugin_Core
 			}		
 		}
 	}
-
+	/**
+	 * Update Carts table according to id_cart 
+	 * 
+	 * @since    1.0.0
+	 * @param 	 int					$cart_update ID cart in table cart
+	 */
 	function clientify_cart_updated($cart_updated)
 	{
 		if ( $cart_updated ) {
 			$this->clientify_save_add_to_cart(null, null);
 		}
 	}
+	/**
+	 * Delete cart if purchase is complete
+	 *
+	 * @since    1.0.0
+	 * @param    int                  $order_id    The order id number.
 
+	 */
 	function delete_cart($order_id)
 	{
 		global $wpdb;
@@ -674,7 +707,13 @@ class Clientify_Plugin_Core
 		$wpdb->query('DELETE FROM ' . $wpdb->prefix . 'cart WHERE id_customer = ' . (int)$order_customer_id . ' ');
 		$wpdb->query('DELETE FROM ' . $wpdb->prefix . 'clientify_abandoned_cart WHERE id_customer = ' . (int)$order_customer_id . ' ');
 	}
+	/**
+	 * Delete item from temporaly cart
+	 *
+	 * @since    1.0.0
+	 * @param    int                  $order_id    The order id number.
 
+	 */
 	function delete_item_cart($cart_item)
 	{
 		global $wpdb;
@@ -700,6 +739,12 @@ class Clientify_Plugin_Core
 			$response =	$wpdb->delete($table_ac, array('id_customer' => $id_ac));
 		}
 	}
+		/**
+	 * Collects abandoned carts and sends them to clientify.
+	 *
+	 * @since    1.0.0
+	 * @param    int                  $cookie_cart_id    The id number in tab abandoned_cart.
+	 */
 	function sync_hook_abandoned_cart($cookie_cart_id)
 	{
 		global $wpdb;
@@ -832,8 +877,11 @@ class Clientify_Plugin_Core
 			}			
 		}
 	}
-	/* END ABANDON CART FUNTIONS */
-	//Visitor
+	/**
+	 * for long-standing customers we handle temporary cookie.
+	 *
+	 * @since    1.0.0
+	 */
 	public function clientify_update_vk()
 	{
 		global $wpdb;

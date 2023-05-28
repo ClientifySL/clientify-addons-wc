@@ -91,6 +91,9 @@ class Clientify_Addons {
 	 * - Clientify_Addons_i18n. Defines internationalization functionality.
 	 * - Clientify_Addons_Admin. Defines all hooks for the admin area.
 	 * - Clientify_Addons_Public. Defines all hooks for the public side of the site.
+	 * - Clientify_Plugin_Core. Defines all functions for integration with clientify.
+	 * - Clientify_Endpoint. Defines endpoints and functions for comunicate clientify with plugin.
+	 * - Clientify_Api. Define parameters with comunicate Api clientify.
 	 *
 	 * Create an instance of the loader which will be used to register the hooks
 	 * with WordPress.
