@@ -633,8 +633,8 @@ class Clientify_Endpoint {
 		$date_null = $created_from != 0 ? "between  '".$created_from."'  and '".$created_end."'" : '';
 		$limit = $per_page != 0 ? 'LIMIT '.(($page-1)*$per_page).' , '.$per_page.'' : '' ;
 
-        $total = $wpdb->get_results("SELECT DISTINCT c.cookie_cart_id, c.id_customer FROM ". $wpdb->prefix ."clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null."");
-        $order_ids = "SELECT DISTINCT c.cookie_cart_id, c.id_customer,c.id_clientify_abandoned_cart FROM ". $wpdb->prefix . "clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." ORDER BY c.id_customer ".$limit;
+        $total = $wpdb->get_results("SELECT DISTINCT c.cookie_cart_id, c.id_customer FROM ". $wpdb->prefix ."clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." group by c.id_customer");
+        $order_ids = "SELECT DISTINCT c.cookie_cart_id, c.id_customer,c.id_clientify_abandoned_cart FROM ". $wpdb->prefix . "clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." group by c.id_customer ORDER BY c.id_customer ".$limit;
         if ( isset($per_page) ) {
                 $to_per = count($total)/$per_page;
                 $total_pages = is_float($to_per) ? intval($to_per+1) : $to_per ;

@@ -855,8 +855,15 @@ class Clientify_Plugin_Core
 		$in_aban = array(
 			'cookie_cart_id' => is_null($cookie_cart_id->cookie_cart_id) || $cookie_cart_id->cookie_cart_id == '' ? NULL : $cookie_cart_id->cookie_cart_id,
 			'id_customer'    => is_null($cart_item->id_customer) || $cart_item->id_customer == '' ? NULL : $cart_item->id_customer,
+			'date_add'		 => $cart_date
 		);
-		$wpdb->insert($wpdb->prefix . "clientify_abandoned_cart", $in_aban);
+		$search_duplicate = $wpdb->get_results('SELECT id_clientify_abandoned_cart FROM ' . $wpdb->prefix . 'clientify_abandoned_cart where '. $table_name .' = "' . $id_contac . '"');
+		if( $search_duplicate != 0 ){
+			$wpdb->insert($wpdb->prefix . "clientify_abandoned_cart", $in_aban);
+		}else{
+			$wpdb->update( $wpdb->prefix . "clientify_abandoned_cart",  $in_aban, array( 'id_clientify_abandoned_cart'=>$search_duplicate ) );	
+		}
+		
 		$id_cart = $wpdb->get_results('SELECT id_clientify_abandoned_cart FROM ' . $wpdb->prefix . 'clientify_abandoned_cart where '. $table_name .' = "' . $id_contac . '"');
 		$data['cart_id'] = $id_cart[0]->id_clientify_abandoned_cart;
 		$data['order_id'] = $id_cart[0]->id_clientify_abandoned_cart;
