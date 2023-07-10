@@ -105,6 +105,41 @@ class Clientify_Addons_Activator
                         ADD COLUMN `id_customer` INT(11) NULL DEFAULT NULL AFTER cookie_cart_id";
         $wpdb->query($sql);
 
+        if (is_plugin_active('woo-cart-abandonment-recovery/woo-cart-abandonment-recovery.php')) {
+            $sql = "SELECT session_id  FROM wp_cartflows_ca_cart_abandonment wccca";
+            $data = $wpdb->get_results($sql);
+            foreach ( $data as $data_cartflow ) {
+                $cart_flow = Cartflows_Ca_Helper::get_instance()->get_checkout_details( $data_cartflow->session_id );
+                $cart_content = maybe_unserialize( $cart_flow->cart_contents );
+                $date = $cart_flow->time;
+                $user = get_user_by( 'email', $cart_flow->email );
+
+                if (!$user->id) {
+                    $sql = "SELECT user_id FROM wp_usermeta WHERE meta_key = 'billing_email' AND meta_value = '".$cart_flow->email."' LIMIT 1 ";
+                    $data = $wpdb->get_results($sql);
+                    $user_id = $data[0]->user_id;
+                }else {
+                    $user_id = $user->id;
+                }
+                $cart_item_data = array();
+				if (is_array($cart_content) || is_object($cart_content) ) {
+                    foreach ( $cart_content as $cart_item ){
+                        
+                        $cart_item_data = array(
+
+                            'id_customer' => $user_id,
+                            'id_product'  => $cart_item['product_id'],
+                            'quantity'    => $cart_item['quantity'],
+                            'currency'    => get_option('woocommerce_currency'),
+                            'language'    => get_bloginfo("language"),
+                            'date_add'    => $date,
+                            
+                        );
+                        $wpdb->insert($wpdb->prefix . "cart", $cart_item_data);
+					}  
+				}
+            }
+        }
 
         /* set default time Abandoned Card  */
         update_option('CLIENTIFY_STATUS', 0);

@@ -108,6 +108,13 @@ class Clientify_Endpoint {
         $per_page = $params->get_param('per_page');
         $paged = ($params->get_param('page')) ? $params->get_param('page') : 1;
         $offset = ( $per_page * $paged ) - $per_page;
+        $clientify_order_status = get_option('CLIENTIFY_ORDER_STATUS');
+        $order_status_settings = array();
+        
+        foreach ($clientify_order_status as $value) {
+            array_push($order_status_settings, $value);
+
+           }
 
 		$args = array(			
             'date_created' => '>' . $created_at_min,
@@ -116,12 +123,14 @@ class Clientify_Endpoint {
             'limit'        => isset($per_page) ? $per_page : -1,
             'offset'       => $offset,
             'paged'        => $paged,
+            'status'       => $order_status_settings,
 			'return'       => 'ids'
 		   ); 
         $all_total = array(			
             'date_created' => '>' . $created_at_min,
             'orderby'      => 'ID',
             'order'        => 'ASC',
+            'status'       => $order_status_settings,
 			'return'       => 'ids',
             'limit'        => -1,
 		   ); 
@@ -135,15 +144,16 @@ class Clientify_Endpoint {
         $query = new WC_Order_Query($args);
         $orders_ids = $query->get_orders();
         $all = array();
-
+        
 		foreach( $orders_ids as $order_id ) {		   
 		   $order = wc_get_order($order_id); //cn esto valido al llegar if
 		   $order_status  = $order->get_status();
            $key = 'wc-' . $order_status;
-           $clientify_order_status = get_option('CLIENTIFY_ORDER_STATUS');
-
-           foreach ( $clientify_order_status as $key => $order_status ) :
-            if ( in_array($key, $clientify_order_status) ) {
+           //$clientify_order_status = get_option('CLIENTIFY_ORDER_STATUS');
+                       
+           //foreach ( $clientify_order_status as $key => $order_status ) :
+            if ( in_array($key, $order_status_settings) ) {
+                //var_dump($order_status, in_array($key, $order_status_settings));
                 $order_data = $order->get_data();
                 $id_customer = $order->get_customer_id();
                 $contact = null;
@@ -254,7 +264,7 @@ class Clientify_Endpoint {
                     }
                 $all [] = array($data);
             }
-           endforeach;
+           //endforeach;
 		}
         $response = new WP_REST_Response($all, 200);
         
@@ -630,10 +640,10 @@ class Clientify_Endpoint {
         $paged = empty($params->get_param('page')) ? 1 : $params->get_param('page');
 		$page =(int)(!isset($paged)) ? 1 : $paged;
 		$per_page = (int)$params["per_page"];
-		$date_null = $created_from != 0 ? "between  '".$created_from."'  and '".$created_end."'" : '';
+		$date_null = $created_from != 0 ? "between  '".date("Y-m-d", strtotime($created_from))."'  and '".date("Y-m-d", strtotime($created_end))."'" : '';
 		$limit = $per_page != 0 ? 'LIMIT '.(($page-1)*$per_page).' , '.$per_page.'' : '' ;
 
-        $total = $wpdb->get_results("SELECT DISTINCT c.cookie_cart_id, c.id_customer FROM ". $wpdb->prefix ."clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." group by c.id_customer");
+        $total = $wpdb->get_results("SELECT DISTINCT c.cookie_cart_id, c.id_customer FROM ". $wpdb->prefix ."clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." group by c.id_customer");   
         $order_ids = "SELECT DISTINCT c.cookie_cart_id, c.id_customer,c.id_clientify_abandoned_cart FROM ". $wpdb->prefix . "clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." group by c.id_customer ORDER BY c.id_customer ".$limit;
         if ( isset($per_page) ) {
                 $to_per = count($total)/$per_page;
