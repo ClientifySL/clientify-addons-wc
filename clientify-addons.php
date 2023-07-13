@@ -16,7 +16,7 @@
  * Plugin Name:       Clientify-Ecommerce
  * Plugin URI:        http://clientify.com/
  * Description:       Conecta woocommerce con Clientify para automatizar el marketing de tu tienda online.
- * Version:           1.0.0
+ * Version:           0.0.1
  * Author:            Clientify SL
  * Author URI:        Clientify SL
  * License:           GPL-2.0+

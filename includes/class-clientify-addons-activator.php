@@ -4,7 +4,7 @@
  * Fired during plugin activation
  *
  * @link       Emerson Ramirez
- * @since      1.0.0
+ * @since      0.0.1
  *
  * @package    Clientify_Addons
  * @subpackage Clientify_Addons/includes
@@ -15,7 +15,7 @@
  *
  * This class defines all code necessary to run during the plugin's activation.
  *
- * @since      1.0.0
+ * @since      0.0.1
  * @package    Clientify_Addons
  * @subpackage Clientify_Addons/includes
  * @author     Emerson Ramirez <ramirezemerson1991@gmail.com>
@@ -106,8 +106,8 @@ class Clientify_Addons_Activator
         $wpdb->query($sql);
 
         if (is_plugin_active('woo-cart-abandonment-recovery/woo-cart-abandonment-recovery.php')) {
-            $sql = "SELECT session_id  FROM wp_cartflows_ca_cart_abandonment wccca";
-            $data = $wpdb->get_results($sql);
+            $sql = "SELECT session_id  FROM ".$wpdb->prefix ."cartflows_ca_cart_abandonment wccca";
+            $data = $wpdb->get_results($sql);        
             foreach ( $data as $data_cartflow ) {
                 $cart_flow = Cartflows_Ca_Helper::get_instance()->get_checkout_details( $data_cartflow->session_id );
                 $cart_content = maybe_unserialize( $cart_flow->cart_contents );
@@ -115,7 +115,7 @@ class Clientify_Addons_Activator
                 $user = get_user_by( 'email', $cart_flow->email );
 
                 if (!$user->id) {
-                    $sql = "SELECT user_id FROM wp_usermeta WHERE meta_key = 'billing_email' AND meta_value = '".$cart_flow->email."' LIMIT 1 ";
+                    $sql = "SELECT user_id FROM ".$wpdb->prefix ."usermeta WHERE meta_key = 'billing_email' AND meta_value = '".$cart_flow->email."' LIMIT 1 ";
                     $data = $wpdb->get_results($sql);
                     $user_id = $data[0]->user_id;
                 }else {
@@ -135,7 +135,20 @@ class Clientify_Addons_Activator
                             'date_add'    => $date,
                             
                         );
-                        $wpdb->insert($wpdb->prefix . "cart", $cart_item_data);
+                        $sql = "SELECT *  FROM ".$wpdb->prefix ."cart WHERE id_customer=".$user_id." AND id_product=".$cart_item['product_id']."";
+                        $data = $wpdb->get_results($sql);
+                        
+                            if ( $data[0]->id_customer == $user_id && $data[0]->id_product == $cart_item['product_id'] ) {
+                                // Condición para la actualización (por ejemplo, basada en un identificador único)
+                                $condicion = array(
+                                    'id_customer' => $user_id,
+                                    'id_product'  => $cart_item['product_id'],
+                                );
+                                $wpdb->update($wpdb->prefix . "cart", $cart_item_data, $condicion);
+                                
+                            }else {
+                                $wpdb->insert($wpdb->prefix . "cart", $cart_item_data);
+                            }
 					}  
 				}
             }
