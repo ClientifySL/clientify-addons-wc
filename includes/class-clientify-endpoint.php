@@ -224,7 +224,12 @@ class Clientify_Endpoint {
                         }
 
                     $join_cat = implode(",",$new_categories)."/".implode(",",$sub_categories);
-                    $discount = ($discount_price * 100) / $price;
+                    if ($price == 0) {
+                        $discount = 0;
+                    } else {
+                        $discount = ($discount_price * 100) / $price;
+                    }
+                    
                     $items[] = array(
                         'name'        => $order_product->get_name(),
                         'description' => $product_full_description,
@@ -381,39 +386,49 @@ class Clientify_Endpoint {
     /* get Customers  list all*/
     public function sync_all_customer($params){
 
-        $created_at_min = $params->get_param('created_at_min');
+        $created_at_min = date("Y-m-d", strtotime($params->get_param('created_at_min')));
         $per_page = $params->get_param('per_page');
         $paged = ($params->get_param('page')) ? $params->get_param('page') : 1;
         $offset = ( $per_page * $paged ) - $per_page;
+        global $wpdb;
+        $user_role = 'customer';
 
-		$args = array(			
-            'date_created' => '>' . $created_at_min,
-            'orderby'      => 'ID',
-            'order'        => 'ASC',
-            'fields'       => 'ID',
-            'role'         => 'customer',
-            'number'       => isset($per_page) ? $per_page : -1,
-            'offset'       => $offset,
-            'paged'        => $paged,
-		   );
-        $all_total = array(			
-            'date_created' => '>' . $created_at_min,
-            'orderby'      => 'ID',
-            'order'        => 'ASC',
-			'fields'       => 'ID',
-            'limit'        => -1,
-            'role'         => 'customer',
-		   ); 
-        $total = get_users($all_total);
+        $query = $wpdb->prepare(
+            "SELECT ID
+            FROM {$wpdb->users} as u
+            INNER JOIN {$wpdb->usermeta} AS um ON u.ID = um.user_id
+            WHERE DATE(u.user_registered) >= %s
+            AND um.meta_key = '{$wpdb->prefix}capabilities'
+            AND um.meta_value LIKE %s
+            ORDER BY u.user_registered ASC
+            LIMIT %d OFFSET %d",
+            $created_at_min,
+            '%"'.$user_role.'"%',
+            $per_page,
+            $offset
+        );
+
+        $query_total = $wpdb->prepare(
+            "SELECT ID
+            FROM {$wpdb->users} as u
+            INNER JOIN {$wpdb->usermeta} AS um ON u.ID = um.user_id
+            WHERE DATE(u.user_registered) >= %s
+            AND um.meta_key = '{$wpdb->prefix}capabilities'
+            AND um.meta_value LIKE %s
+            ORDER BY u.user_registered ASC",
+            $created_at_min,
+            '%"'.$user_role.'"%',
+        );
+
+        $users = $wpdb->get_results($query);
+        $users_total = $wpdb->get_results($query_total);
         if ( isset($per_page) ) {
-        $to_per = count($total)/$per_page;
-        $total_pages = is_float($to_per) ? intval($to_per+1) : $to_per ;
-        }
-        $contacs = array();
-        $customer_query = new WP_User_Query($args);
-        
-        foreach ( $customer_query->get_results() as $customer_to_sync ) {
-            $customer = $this->get_contact($customer_to_sync);
+            $to_per = count($users_total)/$per_page;
+            $total_pages = is_float($to_per) ? intval($to_per+1) : $to_per ;
+            }
+        $contacs = array(); 
+        foreach ( $users as $customer_to_sync ) {
+            $customer = $this->get_contact($customer_to_sync->ID);
             $contacs[] = $customer;
         }
 
@@ -421,6 +436,7 @@ class Clientify_Endpoint {
         $response->header( 'Link', $total_pages); // maximum number of pages 
 		return $response;
     }
+
     function get_contact($user_id){
         global $wpdb;
         global $woocommerce;
@@ -633,7 +649,7 @@ class Clientify_Endpoint {
 
         global $wpdb;
         $all = array();
-        $created_from = $params->get_param('created_from');
+        $created_from = date("Y-m-d", strtotime($params->get_param('created_from')));
         $created_end = empty($params->get_param('created_end')) ? date("Y-m-d") : $params->get_param('created_end');
 
         $per_page = empty($params->get_param('per_page')) ? 0 : $params->get_param('per_page');
