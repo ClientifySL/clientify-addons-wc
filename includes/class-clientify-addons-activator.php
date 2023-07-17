@@ -106,10 +106,23 @@ class Clientify_Addons_Activator
         $wpdb->query($sql);
 
         if (is_plugin_active('woo-cart-abandonment-recovery/woo-cart-abandonment-recovery.php')) {
+
+            $table_cart = $wpdb->prefix . 'cart';
+            $table_abandoned = $wpdb->prefix . 'clientify_abandoned_cart';
+            $max_cart_number = $wpdb->get_var( "SELECT MAX(id_cart) FROM $table_cart" );
+            $max_abandoned_number = $wpdb->get_var( "SELECT MAX(id_clientify_abandoned_cart) FROM $table_abandoned" );
+            
+            $wpdb->delete( $table_cart, array('id_customer' => null), array( '%d' ) );
+            $wpdb->delete( $table_abandoned, array('id_customer' => null), array( '%d' ) );
+
+            $wpdb->query( "ALTER TABLE $table_cart AUTO_INCREMENT = " . (int) $max_cart_number );
+            $wpdb->query( "ALTER TABLE $table_abandoned AUTO_INCREMENT = " . (int) $max_abandoned_number );
+
             $sql = "SELECT session_id  FROM ".$wpdb->prefix ."cartflows_ca_cart_abandonment wccca";
             $data = $wpdb->get_results($sql);        
             foreach ( $data as $data_cartflow ) {
                 $cart_flow = Cartflows_Ca_Helper::get_instance()->get_checkout_details( $data_cartflow->session_id );
+                
                 $cart_content = maybe_unserialize( $cart_flow->cart_contents );
                 $date = $cart_flow->time;
                 $user = get_user_by( 'email', $cart_flow->email );
