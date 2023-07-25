@@ -257,6 +257,7 @@ class Clientify_Endpoint {
                     'currency' => $currency,
                     'products' => $items,
                     'price' => $total_price,
+                    'shipping' => $order_data['shipping_total'],
                     'coupon' => $order_discount_total ? $order_discount_total : 0,
 
                 );
@@ -659,129 +660,352 @@ class Clientify_Endpoint {
 		$date_null = $created_from != 0 ? "between  '".date("Y-m-d", strtotime($created_from))."'  and '".date("Y-m-d", strtotime($created_end))."'" : '';
 		$limit = $per_page != 0 ? 'LIMIT '.(($page-1)*$per_page).' , '.$per_page.'' : '' ;
 
-        $total = $wpdb->get_results("SELECT DISTINCT c.cookie_cart_id, c.id_customer FROM ". $wpdb->prefix ."clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." group by c.id_customer");   
-        $order_ids = "SELECT DISTINCT c.cookie_cart_id, c.id_customer,c.id_clientify_abandoned_cart FROM ". $wpdb->prefix . "clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." group by c.id_customer ORDER BY c.id_customer ".$limit;
-        if ( isset($per_page) ) {
-                $to_per = count($total)/$per_page;
-                $total_pages = is_float($to_per) ? intval($to_per+1) : $to_per ;
-            }
+        if (is_plugin_active('woo-cart-abandonment-recovery/woo-cart-abandonment-recovery.php')) {
 
-        $cookie_carts = $wpdb->get_results($order_ids);
+            $total = $wpdb->get_results("SELECT wcac.cartflows_id FROM ". $wpdb->prefix . "clientify_abandoned_cart wcac WHERE DATE(date_add)  ".$date_null." group by wcac.cartflows_id ");   
+            $order_ids = "SELECT wcac.cartflows_id FROM ". $wpdb->prefix . "clientify_abandoned_cart wcac WHERE DATE(date_add)  ".$date_null." group by wcac.cartflows_id ".$limit;
+            
+            if ( isset($per_page) ) {
+                    $to_per = count($total)/$per_page;
+                    $total_pages = is_float($to_per) ? intval($to_per+1) : $to_per ;
+                }
 
-        if ( !empty($cookie_carts) ) {
+            $cookie_carts = $wpdb->get_results($order_ids);
+            $carts = array() ;
             foreach ( $cookie_carts as $cookie_carts_results => $cookie_cart_id ) {
-
+                $cart = $wpdb->get_row('SELECT session_id  FROM ' . $wpdb->prefix . 'cartflows_ca_cart_abandonment WHERE id="'.$cookie_cart_id->cartflows_id.'"');
+                $carts[] = $cart->session_id;		
+            }
+            
             $endpoint_class = new Clientify_Endpoint();
             $url_base = $endpoint_class->get_local_api_url();
-            $id_contac = is_null($cookie_cart_id->id_customer) || $cookie_cart_id->id_customer == '' ? $cookie_cart_id->cookie_cart_id : $cookie_cart_id->id_customer;
-            $table_name = is_null($cookie_cart_id->id_customer) || $cookie_cart_id->id_customer == '' ? 'cookie_cart_id' : 'id_customer';
-            $carts = $wpdb->get_results('SELECT * FROM ' . $wpdb->prefix . 'cart where '. $table_name .' = "' . $id_contac . '"');		
-            $items = array();
-            $total_price = 0;
 
-            foreach ( $carts as $cart_item_key => $cart_item ) {
+
+
+            foreach ( $carts as $sesson_id ) {
+				
+				if ( $sesson_id ) {
+					$details          = Cartflows_Ca_Helper::get_instance()->get_checkout_details( $sesson_id );
+					$user_details     = (object) maybe_unserialize( $details->other_fields );
+
+					$cart_abandonment = Cartflows_Ca_Helper::get_instance();
+					$token_data       = array( 'wcf_session_id' => $details->session_id );
+					
+				}
+
+				$cart_content = maybe_unserialize( $details->cart_contents );
+				
+				if ( ! is_array( $cart_content ) || ! count( $cart_content ) ) {
+					return;
+				}
+				$items = array();
+				$total_price = 0;
+
+				$total    = 0;
+				$discount = 0;
+				$tax      = 0;
+					foreach ( $cart_content as $cart_item ){
+
+						$discount  = $discount + ( $cart_item['line_subtotal'] - $cart_item['line_total'] );
+						$total     = $total + $cart_item['line_subtotal'];
+						$tax       = $tax + $cart_item['line_tax'];
+						
+						$shipping = $discount + ( $details->cart_total - $total ) - $tax ;
+						
+								$contact = null;
+								$visitor_key = null;
+
+						
+						$product_id = $cart_item['product_id'];
+						$categories = array();
+						$sub_categories= array();
+						$terms = get_the_terms($product_id, 'product_cat');
+						foreach ( $terms as $term ) {
+							if ( $term->parent == 0 ){                                           
+								$categories[] = $term->term_id.":".$term->slug;
+							}else{
+								foreach ( $categories as $cat ) {
+									$cat_data = explode(":",$cat);													
+									(int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
+								}
+								if( !$cat ){                            
+									$term_search = get_term_by('id', $term->parent, 'product_cat');
+									if($term_search->parent == 0){
+										$categories[] = $term_search->term_id.":".$term_search->slug;
+									}
+									else{
+										$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
+									}                            
+								}
+								if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
+										$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+									}
+								foreach ( $categories as $key => $value ) {                            
+									foreach( $sub_categories as $key => $value_sub ){
+										$explode = explode("|", $value_sub);
+										$arr = array($explode[0]);
+										if (in_array($value, $arr)) {
+										unset($categories[$key]);
+										}
+									}                            
+								}                        
+							}          
+						}
+						$cart_date = $cart_item->date_add;
+						$product = wc_get_product($product_id);
+						$price = $product->get_price();
+						$total_price += $price;
+						$without_reduction = $price;
+						$discount = $without_reduction - $cart_item['line_total'];
+						
+						if ( $price == 0 ) {
+							$discount = 0;
+						}else{
+							$discount = round( ($discount / $without_reduction) * 100, 2);
+						}
+						
+						$price = $product->get_sale_price();
+						if ( empty($price) ) {
+							$price = $product->get_regular_price();
+						}	
+						$join_cat = implode(",",$categories)."/".implode(",",$sub_categories);
+						
+						$items[] = array(
+							'name'        => $product->get_title(),
+							'description' => $product->get_description(),
+							'category'    => $join_cat,
+							'sku'         => $product->get_sku(),
+							'image_url'   => get_the_post_thumbnail_url($product_id),
+							'item_url'    => $product->get_permalink($cart_item),
+							'price'       => $price,
+							'quantity'    => (int) $cart_item['quantity'],
+							'discount'    => $discount,
+						);
+						
+						
+					}
+					
+				$data = array(
+					'status'         => 'abandoned',
+					'abandoned_date' => date('Y-m-d', strtotime($details->time)),
+					'ecommerce'      => 'woocommerce',
+					'shop_name'      => get_option('blogname'),
+					'order_url'      => $cart_abandonment->get_checkout_url( $details->checkout_id, $token_data ),
+					'currency'       => get_option('woocommerce_currency'),
+					'store_url'      => $url_base,
+					'products'       => $items,
+					'price'	         => $details->cart_total,
+					'shipping'	     => $shipping,
+					'coupon'         =>  0
+					
+				);
+				
+				$lang = get_bloginfo("language");
+				$site_name = get_option('blogname');
+				$site_name_valid = empty( $site_name ) ? 'WordPress' : $site_name;
+				
+				$data['contact'] = array(
+							'id_customer'     => '',
+							'email'       	  => $details->email,
+							'contact_source'  => get_option('blogname'),
+							'custom_field'   => [],
+							'tags'            => array(
+													'woocommerce',
+													$site_name_valid,
+												)
+						);
+						if ( !empty( $user_details->wcf_first_name ) ) {
+							$data['contact']['first_name'] = $user_details->wcf_first_name;
+						}
+						if ( !empty($user_details->wcf_last_name) ) {
+							$data['contact']['last_name'] = $user_details->wcf_last_name;
+						}
+						if ( !empty($lang) ) {
+							$data['contact']['custom_field'] = array(
+								'field' => 'ecommerce_language',
+								'value' => $lang,
+							);
+						}
+
+						$street = $user_details->wcf_billing_address_1 . $user_details->wcf_billing_address_2;
+						$city = $user_details->wcf_shipping_city;
+						$country = $user_details->wcf_shipping_country;
+						$postal_code = $user_details->wcf_billing_postcode;
+						$customer_address = array('type' => 1);
+
+						if ( $street ) {
+							$customer_address['street'] = $street;
+						}
+						if ( $city ) {
+							$customer_address['city'] = $city;
+						}
+						if ( $country ) {
+							$customer_address['country'] = $country;
+						}
+						if ( $postal_code ) {
+							$customer_address['postal_code'] = $postal_code;
+						}
+
+						if ( !empty($user_details->wcf_billing_state) ) {
+							$customer_address['state'] = $user_details->wcf_billing_state;
+							if ( empty($customer_address['state']) ) {
+								unset($customer_address['state']);
+							}
+						}
+						$data['contact']['addresses'][] = $customer_address;
+
+						if ( !empty($user_details->wcf_billing_company) ) {
+							$data['contact']['company'] = $user_details->wcf_billing_company;
+						}
+
+						if ( !empty($user_details->wcf_phone_number) ) {
+							$data['contact']['phones'][] = array('phone' => $user_details->wcf_phone_number);
+							$customer_phones[] = $user_details->wcf_phone_number;
+						}
+
+						
+				
+				
+				$sql = 'SELECT wccca.id FROM ' . $wpdb->prefix . 'cartflows_ca_cart_abandonment wccca WHERE session_id="'.$sesson_id.'"';
+            	$id_cartslow = $wpdb->get_row($sql);
+
+				
+				$data['cart_id'] = $id_cartslow->id;
+				$data['order_id'] = $id_cartslow->id;
+				
+				$all [] = $data;
+	
+			}
+
+        }else{
+
+            $total = $wpdb->get_results("SELECT DISTINCT c.cookie_cart_id, c.id_customer FROM ". $wpdb->prefix ."clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." group by c.id_customer");   
+            $order_ids = "SELECT DISTINCT c.cookie_cart_id, c.id_customer,c.id_clientify_abandoned_cart FROM ". $wpdb->prefix . "clientify_abandoned_cart c  WHERE DATE(date_add)  ".$date_null." group by c.id_customer ORDER BY c.id_customer ".$limit;
+            if ( isset($per_page) ) {
+                    $to_per = count($total)/$per_page;
+                    $total_pages = is_float($to_per) ? intval($to_per+1) : $to_per ;
+                }
+
+            $cookie_carts = $wpdb->get_results($order_ids);
+
+            if ( !empty($cookie_carts) ) {
                 
-                $contact = null;
-                $visitor_key = null;
+                foreach ( $cookie_carts as $cookie_carts_results => $cookie_cart_id ) {
 
-                if ( $cart_item->id_customer ) {
-                    $contact = $cookie_cart_id->id_customer;
-                } else {
-                    $visitor_key = (string)$cookie_cart_id->cookie_cart_id;
-                }
-                if ( empty($contact) && empty($visitor_key) ) {
-                    return false;
-                }
-                $product_id = $cart_item->id_product;
-                $categories = array();
-                $sub_categories= array();
-                $terms = get_the_terms($product_id, 'product_cat');
-                foreach ( $terms as $term ) {
-                    if ( $term->parent == 0 ){                                           
-                        $categories[] = $term->term_id.":".$term->slug;
-                    }else{
-                        foreach ( $categories as $cat ) {
-                            $cat_data = explode(":",$cat);													
-                            (int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
+                    $endpoint_class = new Clientify_Endpoint();
+                    $url_base = $endpoint_class->get_local_api_url();
+                    $id_contac = is_null($cookie_cart_id->id_customer) || $cookie_cart_id->id_customer == '' ? $cookie_cart_id->cookie_cart_id : $cookie_cart_id->id_customer;
+                    $table_name = is_null($cookie_cart_id->id_customer) || $cookie_cart_id->id_customer == '' ? 'cookie_cart_id' : 'id_customer';
+                    $carts = $wpdb->get_results('SELECT * FROM ' . $wpdb->prefix . 'cart where '. $table_name .' = "' . $id_contac . '"');		
+                    $items = array();
+                    $total_price = 0;
+
+                    foreach ( $carts as $cart_item_key => $cart_item ) {
+                        
+                        $contact = null;
+                        $visitor_key = null;
+
+                        if ( $cart_item->id_customer ) {
+                            $contact = $cookie_cart_id->id_customer;
+                        } else {
+                            $visitor_key = (string)$cookie_cart_id->cookie_cart_id;
                         }
-                        if( !$cat ){                            
-                            $term_search = get_term_by('id', $term->parent, 'product_cat');
-                            if( $term_search->parent == 0 ){
-                                $categories[] = $term_search->term_id.":".$term_search->slug;
-                            }
-                            else{
-                                $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
-                            }                            
+                        if ( empty($contact) && empty($visitor_key) ) {
+                            return false;
                         }
-                        if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
-                                $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
-                            }
-                        foreach ( $categories as $key => $value ) {                            
-                            foreach( $sub_categories as $key => $value_sub ){
-                                $explode = explode("|", $value_sub);
-                                $arr = array($explode[0]);
-                                if ( in_array($value, $arr) ) {
-                                    unset($categories[$key]);
+                        $product_id = $cart_item->id_product;
+                        $categories = array();
+                        $sub_categories= array();
+                        $terms = get_the_terms($product_id, 'product_cat');
+                        foreach ( $terms as $term ) {
+                            if ( $term->parent == 0 ){                                           
+                                $categories[] = $term->term_id.":".$term->slug;
+                            }else{
+                                foreach ( $categories as $cat ) {
+                                    $cat_data = explode(":",$cat);													
+                                    (int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
                                 }
-                            }                            
-                          }                        
-                    }          
+                                if( !$cat ){                            
+                                    $term_search = get_term_by('id', $term->parent, 'product_cat');
+                                    if( $term_search->parent == 0 ){
+                                        $categories[] = $term_search->term_id.":".$term_search->slug;
+                                    }
+                                    else{
+                                        $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
+                                    }                            
+                                }
+                                if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
+                                        $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+                                    }
+                                foreach ( $categories as $key => $value ) {                            
+                                    foreach( $sub_categories as $key => $value_sub ){
+                                        $explode = explode("|", $value_sub);
+                                        $arr = array($explode[0]);
+                                        if ( in_array($value, $arr) ) {
+                                            unset($categories[$key]);
+                                        }
+                                    }                            
+                                }                        
+                            }          
+                        }
+
+                        $cart_date = $cart_item->date_add;
+                        $product = wc_get_product($product_id);
+
+                        $price = $product->get_price();
+                        $without_reduction = $product->get_regular_price();
+                        $discount = $without_reduction - $price;
+                        if ( $discount ) {
+                        $discount = round( ($discount / $without_reduction) * 100, 2);
+                        }
+
+                        $price = $product->get_sale_price();
+                        
+                        if ( empty($price) ) {
+                            $price = round($product->get_regular_price(), 2);
+                        }	
+                        $total_price += $price;
+                        $join_cat = implode(",",$categories)."/".implode(",",$sub_categories);
+                        $items[] = array(
+                            'name'        => $product->get_title(),
+                            'description' => $product->get_description(),
+                            'category'    => $join_cat,
+                            'sku'         => $product->get_sku(),
+                            'image_url'   => get_the_post_thumbnail_url($product_id),
+                            'item_url'    => $product->get_permalink($cart_item),
+                            'price'       => $price,
+                            'quantity'    => $cart_item->quantity,
+                            'discount'    => 0,
+                        );		
+                    }
+                    $cart_page_id = wc_get_page_id( 'cart' );
+                    $cart_page_url = $cart_page_id ? get_permalink( $cart_page_id ) : '';	
+
+                    $data = array(
+                        'status'         => 'abandoned',
+                        'abandoned_date' => date('Y-m-d', strtotime($cart_date)),
+                        'cart_id'        => $cookie_cart_id->id_clientify_abandoned_cart,
+                        'order_id'       => $cookie_cart_id->id_clientify_abandoned_cart,
+                        'ecommerce'      => 'woocommerce',
+                        'shop_name'      => get_option('blogname'),
+                        'order_url'      => $cart_page_url.$cookie_cart_id->id_clientify_abandoned_cart,
+                        'currency'       => get_option('woocommerce_currency'),
+                        'store_url'      => $url_base,
+                        'products'       => $items,
+                        'price'	         => $total_price,
+                        'coupon'         =>  0
+                    );
+                    if ( $contact ) {
+                        $data['contact'] = $this->get_contact($cookie_cart_id->id_customer);
+                    } else {
+                        $data['visitor_key'] = $visitor_key;
+                    }     
+                    $all [] = $data;
                 }
-
-                $cart_date = $cart_item->date_add;
-                $product = wc_get_product($product_id);
-
-                $price = $product->get_price();
-                $without_reduction = $product->get_regular_price();
-                $discount = $without_reduction - $price;
-                if ( $discount ) {
-                $discount = round( ($discount / $without_reduction) * 100, 2);
-                }
-
-                $price = $product->get_sale_price();
-                
-                if ( empty($price) ) {
-                    $price = round($product->get_regular_price(), 2);
-                }	
-                $total_price += $price;
-                $join_cat = implode(",",$categories)."/".implode(",",$sub_categories);
-                $items[] = array(
-                    'name'        => $product->get_title(),
-                    'description' => $product->get_description(),
-                    'category'    => $join_cat,
-                    'sku'         => $product->get_sku(),
-                    'image_url'   => get_the_post_thumbnail_url($product_id),
-                    'item_url'    => $product->get_permalink($cart_item),
-                    'price'       => $price,
-                    'quantity'    => $cart_item->quantity,
-                    'discount'    => 0,
-                );		
             }
-            $cart_page_id = wc_get_page_id( 'cart' );
-            $cart_page_url = $cart_page_id ? get_permalink( $cart_page_id ) : '';	
 
-            $data = array(
-                'status'         => 'abandoned',
-                'abandoned_date' => date('Y-m-d', strtotime($cart_date)),
-                'cart_id'        => $cookie_cart_id->id_clientify_abandoned_cart,
-                'order_id'       => $cookie_cart_id->id_clientify_abandoned_cart,
-                'ecommerce'      => 'woocommerce',
-                'shop_name'      => get_option('blogname'),
-                'order_url'      => $cart_page_url.$cookie_cart_id->id_clientify_abandoned_cart,
-                'currency'       => get_option('woocommerce_currency'),
-                'store_url'      => $url_base,
-                'products'       => $items,
-                'price'	         => $total_price,
-                'coupon'         =>  0
-            );
-            if ( $contact ) {
-                $data['contact'] = $this->get_contact($cookie_cart_id->id_customer);
-            } else {
-                $data['visitor_key'] = $visitor_key;
-            }     
-            $all [] = $data;
         }
-    }
+        
         $response = new WP_REST_Response($all, 200);        
         $response->header( 'Link', $total_pages); // maximum number of pages 
         return $response;
