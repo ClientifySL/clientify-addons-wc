@@ -33,7 +33,7 @@ class Clientify_Plugin_Core
 		//register our settings
 		register_setting('clientify-settings-group', 'CLIENTIFY_API_KEY');
 		register_setting('clientify-settings-group', 'CLIENTIFY_API_LOG');
-		register_setting('clientify-settings-group', 'CLIENTIFY_SCRIPT');
+		register_setting('clientify-settings-script', 'CLIENTIFY_SCRIPT', 0);
 		register_setting('clientify-settings-group', 'CLIENTIFY_BOTTOM_SCRIPT');
 		register_setting('clientify-settings-status-order', 'CLIENTIFY_ORDER_STATUS');
 		register_setting('clientify-settings-group', 'CLIENTIFY_CART_HOUR', 6);
