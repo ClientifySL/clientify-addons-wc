@@ -30,6 +30,14 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 /* reset Key and clientify api key    */
-update_option('CLIENTIFY_API_KEY', '');
-update_option('CLIENTIFY_STORE_KEY', '');
+delete_option('CLIENTIFY_API_KEY');
+delete_option('CLIENTIFY_STORE_KEY');
+delete_option('CLIENTIFY_API_KEY');
+delete_option('CLIENTIFY_API_LOG');
+delete_option('CLIENTIFY_SCRIPT');
+delete_option('CLIENTIFY_BOTTOM_SCRIPT');
+delete_option('CLIENTIFY_ORDER_STATUS');
+delete_option('CLIENTIFY_CART_HOUR');
+delete_option('CLIENTIFY_STORE_KEY');
+delete_option('CLIENTIFY_STATUS');
 

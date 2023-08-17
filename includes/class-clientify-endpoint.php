@@ -361,6 +361,7 @@ class Clientify_Endpoint {
 				'store_url' => $url_base
 			);
             update_option('CLIENTIFY_STATUS', 0);
+            update_option('CLIENTIFY_SCRIPT', ' ');
             if ( get_option('CLIENTIFY_STATUS') == 0 ) {
                 return new WP_REST_Response(array('message' => 'success','data'=> $post_key), 200);
             }

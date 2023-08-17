@@ -121,15 +121,18 @@ class Clientify_Plugin_Core
 				'store_url' => $url_base
 			);
 			$response = $api->post_base_clientify($post_key, $key);
+
 		}
 		if ( is_null($response) || isset($response->detail) ) {
 
             $data= is_null($response) != '' ? "error" : $response->detail;
             $response = array(
                 'data' => array(
-                        	'status' => $data
+                        	'status' => $data,
+                        	'data' => $response->detail
                     	)
                 );
+                
             
         }else {
             foreach ( $response as $obj ) {
