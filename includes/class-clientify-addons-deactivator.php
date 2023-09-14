@@ -48,6 +48,7 @@ class Clientify_Addons_Deactivator {
 		);
 		$api->post_base_clientify($post_key,$key);
 		update_option('CLIENTIFY_STATUS', 0);
+		update_option('CLIENTIFY_SCRIPT', 0);
 		wp_clear_scheduled_hook('clientify_job');
 	}
 

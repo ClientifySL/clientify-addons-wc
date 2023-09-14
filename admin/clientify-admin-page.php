@@ -104,7 +104,7 @@ function clientify_settings_page()
 			endswitch;
 		?>
 		<div class="sub_version">
-			<p>Clientify E-commerce version 0.0.2</p>
+			<p>Clientify E-commerce version 0.0.3</p>
 		</div>
 	</div>
 

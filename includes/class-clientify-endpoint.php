@@ -169,37 +169,39 @@ class Clientify_Endpoint {
                     $sub_categories= array();
                     $new_categories = [];
                     $terms = get_the_terms($order_product['product_id'], 'product_cat');
-                    foreach ( $terms as $term ) {
-                            if ( $term->parent == 0 ) {                                           
-                                $categories[] = $term->term_id.":".$term->slug;
-                            }else{
-                                foreach ( $categories as $cat ) {
-                                    $cat_data = explode(":",$cat);													
-                                    (int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
-                                }
-                                if( !$cat ){                            
-                                    $term_search = get_term_by('id', $term->parent, 'product_cat');
-                                    if( $term_search->parent == 0 ){
-                                        $categories[] = $term_search->term_id.":".$term_search->slug;
+                    if ($terms) {  
+                        foreach ( $terms as $term ) {
+                                if ( $term->parent == 0 ) {                                           
+                                    $categories[] = $term->term_id.":".$term->slug;
+                                }else{
+                                    foreach ( $categories as $cat ) {
+                                        $cat_data = explode(":",$cat);													
+                                        (int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
                                     }
-                                    else{
-                                        $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
-                                    }                            
-                                }
-                                if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
-                                        $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
-                                    }
-                                foreach ( $categories as $key => $value ) {                            
-                                    foreach( $sub_categories as $key => $value_sub ) {
-                                        $explode = explode("|", $value_sub);
-                                        $arr = array($explode[0]);
-                                        if ( in_array($value, $arr) ) {
-                                        unset($categories[$key]);
+                                    if( !$cat ){                            
+                                        $term_search = get_term_by('id', $term->parent, 'product_cat');
+                                        if( $term_search->parent == 0 ){
+                                            $categories[] = $term_search->term_id.":".$term_search->slug;
                                         }
-                                    }                            
-                                }                        
-                            }          
+                                        else{
+                                            $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
+                                        }                            
+                                    }
+                                    if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
+                                            $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+                                        }
+                                    foreach ( $categories as $key => $value ) {                            
+                                        foreach( $sub_categories as $key => $value_sub ) {
+                                            $explode = explode("|", $value_sub);
+                                            $arr = array($explode[0]);
+                                            if ( in_array($value, $arr) ) {
+                                            unset($categories[$key]);
+                                            }
+                                        }                            
+                                    }                        
+                                }          
                         }
+                    }
                     $product = $order_product->get_product();
                     
                     $sku = $product->get_sku();
@@ -245,8 +247,112 @@ class Clientify_Endpoint {
                 //total discount
                 $order_discount_total = $order->get_total_discount(!$inc_tax);
 
+                $contact = 0;
+				
+				if ($id_customer){
+					$contact = $this->get_contact($id_customer);
+				}else{
+					if ( $order->get_billing_first_name() && $order->get_billing_last_name() ) {
+						$customer_phones = array();
+						$contact = array(
+							'email' => '',
+							'contact_source'  => get_option('blogname'),
+							'custom_fields'   => [],
+							'tags'            => array(
+													'woocommerce'
+												)
+						);
+						if ( !empty($order->get_billing_email()) ) {
+							$contact['email'] = $order->get_billing_email();
+						}
+						if ( !empty($order->get_billing_first_name()) ) {
+							$contact['first_name'] = $order->get_billing_first_name();
+						}
+						if ( !empty($order->get_billing_last_name()) ) {
+							$contact['last_name'] = $order->get_billing_last_name();
+						}
+						if ( !empty($order->get_billing_company()) ) {
+							$contact['company'] = $order->get_billing_company();
+						}
+
+						$customer_address = array('type' => 1);
+						$street = $order->get_billing_address_1() . (!empty($order->get_billing_address_2()) ? ', ' . $order->get_billing_address_2() : '');
+						if ( !empty($street) ) {
+							$customer_address['street'] = $street;
+						}
+						if ( !empty($order->get_billing_city()) ) {
+							$customer_address['city'] = $order->get_billing_city();
+						}
+						if ( !empty($order->get_billing_state()) ) {
+							$customer_address['state'] = $order->get_billing_state();
+						}
+						if ( !empty($order->get_billing_postcode()) ) {
+							$customer_address['postal_code'] = $order->get_billing_postcode();
+						}
+						if ( !empty($order->get_billing_country()) ) {
+							$customer_address['country'] = $order->get_billing_country();
+						}
+						$contact['addresses'][] = $customer_address;
+						if ( !empty($order->get_billing_phone()) && !in_array($order->get_billing_phone(), $customer_phones ) ) {
+							$contact['phones'][] = array('phone' => $order->get_billing_phone());
+							$customer_phones[] = $order->get_billing_phone();
+						}
+						if ( !empty($lang) ) {
+							$contact['custom_field'] = array(
+								'field' => 'ecommerce_language',
+								'value' => $lang,
+							);
+						}
+					}elseif ( $order->get_shipping_first_name() && $order->get_shipping_last_name() ) {
+						$customer_phones = array();
+						$contact = array(
+							'email' => '',
+							'contact_source'  => get_option('blogname'),
+							'custom_fields'   => [],
+							'tags'            => array(
+													'woocommerce'
+												)
+						);
+			
+						if ( !empty($order->get_shipping_first_name()) ) {
+							$contact['first_name'] = $order->get_shipping_first_name();
+						}
+						if ( !empty($order->get_shipping_last_name()) ) {
+							$contact['last_name'] = $order->get_shipping_last_name();
+						}
+						if ( !empty($order->get_shipping_company()) ) {
+							$contact['company'] = $order->get_shipping_company();
+						}
+
+						$customer_address = array('type' => 1);
+						$street = $order->get_shipping_address_1() . (!empty($order->get_shipping_address_2()) ? ', ' . $order->get_shipping_address_2() : '');
+						if ( !empty($street) ) {
+							$customer_address['street'] = $street;
+						}
+						if ( !empty($order->get_shipping_city()) ) {
+							$customer_address['city'] = $order->get_shipping_city();
+						}
+						if ( !empty($order->get_shipping_state()) ) {
+							$customer_address['state'] = $order->get_shipping_state();
+						}
+						if ( !empty($order->get_shipping_postcode()) ) {
+							$customer_address['postal_code'] = $order->get_shipping_postcode();
+						}
+						if ( !empty($order->get_shipping_country()) ) {
+							$customer_address['country'] = $order->get_shipping_country();
+						}
+						$contact['addresses'][] = $customer_address;
+						
+						if ( !empty($lang) ) {
+							$contact['custom_field'] = array(
+								'field' => 'ecommerce_language',
+								'value' => $lang,
+							);
+						}
+					}
+				}
                 $data = array(
-                    'contact' => $this->get_contact($id_customer),
+                    'contact' => $contact,
                     'status' => 'ordered',
                     'order_date' => $order_data['date_created']->date('Y-m-d H:i:s'),
                     'order_id' => $order->get_id(),
@@ -361,6 +467,7 @@ class Clientify_Endpoint {
 				'store_url' => $url_base
 			);
             update_option('CLIENTIFY_STATUS', 0);
+            update_option('CLIENTIFY_SCRIPT', ' ');
             if ( get_option('CLIENTIFY_STATUS') == 0 ) {
                 return new WP_REST_Response(array('message' => 'success','data'=> $post_key), 200);
             }
@@ -588,37 +695,39 @@ class Clientify_Endpoint {
             $sub_categories= array();
             $new_categories = [];
             $terms = get_the_terms($product->id, 'product_cat');
-            foreach ( $terms as $term ) {
-                if ( $term->parent == 0 ){                                           
-                    $categories[] = $term->term_id.":".$term->slug;
-                }else{
-                    foreach ( $categories as $cat ) {
-                        $cat_data = explode(":",$cat);													
-                        (int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
-                    }
-                    if( !$cat ) {                            
-                        $term_search = get_term_by('id', $term->parent, 'product_cat');
-                        if( $term_search->parent == 0 ){
-                            $categories[] = $term_search->term_id.":".$term_search->slug;
+            if ($terms) {
+                foreach ( $terms as $term ) {
+                    if ( $term->parent == 0 ){                                           
+                        $categories[] = $term->term_id.":".$term->slug;
+                    }else{
+                        foreach ( $categories as $cat ) {
+                            $cat_data = explode(":",$cat);													
+                            (int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
                         }
-                        else{
-                            $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
-                        }                            
-                    }
-                    if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
-                            $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
-                        }
-                    foreach ( $categories as $key => $value ) {                            
-                        foreach( $sub_categories as $key => $value_sub ){
-                            $explode = explode("|", $value_sub);
-                            $arr = array($explode[0]);
-                            if ( in_array($value, $arr) ) {
-                                unset($categories[$key]);
+                        if( !$cat ) {                            
+                            $term_search = get_term_by('id', $term->parent, 'product_cat');
+                            if( $term_search->parent == 0 ){
+                                $categories[] = $term_search->term_id.":".$term_search->slug;
                             }
-                        }                            
-                      }                        
-                }          
-            }    
+                            else{
+                                $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
+                            }                            
+                        }
+                        if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
+                                $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+                            }
+                        foreach ( $categories as $key => $value ) {                            
+                            foreach( $sub_categories as $key => $value_sub ){
+                                $explode = explode("|", $value_sub);
+                                $arr = array($explode[0]);
+                                if ( in_array($value, $arr) ) {
+                                    unset($categories[$key]);
+                                }
+                            }                            
+                        }                        
+                    }          
+                } 
+            }   
             $sku = $product->get_sku();
             $image_id  = $product->get_image_id();
             $image_url = wp_get_attachment_image_url($image_id, 'full');
@@ -720,37 +829,40 @@ class Clientify_Endpoint {
 						$categories = array();
 						$sub_categories= array();
 						$terms = get_the_terms($product_id, 'product_cat');
-						foreach ( $terms as $term ) {
-							if ( $term->parent == 0 ){                                           
-								$categories[] = $term->term_id.":".$term->slug;
-							}else{
-								foreach ( $categories as $cat ) {
-									$cat_data = explode(":",$cat);													
-									(int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
-								}
-								if( !$cat ){                            
-									$term_search = get_term_by('id', $term->parent, 'product_cat');
-									if($term_search->parent == 0){
-										$categories[] = $term_search->term_id.":".$term_search->slug;
-									}
-									else{
-										$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
-									}                            
-								}
-								if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
-										$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
-									}
-								foreach ( $categories as $key => $value ) {                            
-									foreach( $sub_categories as $key => $value_sub ){
-										$explode = explode("|", $value_sub);
-										$arr = array($explode[0]);
-										if (in_array($value, $arr)) {
-										unset($categories[$key]);
-										}
-									}                            
-								}                        
-							}          
-						}
+                        if ($terms) {
+                            foreach ( $terms as $term ) {
+                                if ( $term->parent == 0 ){                                           
+                                    $categories[] = $term->term_id.":".$term->slug;
+                                }else{
+                                    foreach ( $categories as $cat ) {
+                                        $cat_data = explode(":",$cat);													
+                                        (int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
+                                    }
+                                    if( !$cat ){                            
+                                        $term_search = get_term_by('id', $term->parent, 'product_cat');
+                                        if($term_search->parent == 0){
+                                            $categories[] = $term_search->term_id.":".$term_search->slug;
+                                        }
+                                        else{
+                                            $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
+                                        }                            
+                                    }
+                                    if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
+                                            $sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+                                        }
+                                    foreach ( $categories as $key => $value ) {                            
+                                        foreach( $sub_categories as $key => $value_sub ){
+                                            $explode = explode("|", $value_sub);
+                                            $arr = array($explode[0]);
+                                            if (in_array($value, $arr)) {
+                                            unset($categories[$key]);
+                                            }
+                                        }                            
+                                    }                        
+                                }          
+                            }
+                        }
+						
 						$cart_date = $cart_item->date_add;
 						$product = wc_get_product($product_id);
 						$price = $product->get_price();
@@ -955,8 +1067,11 @@ class Clientify_Endpoint {
                         $price = $product->get_price();
                         $without_reduction = $product->get_regular_price();
                         $discount = $without_reduction - $price;
-                        if ( $discount ) {
-                        $discount = round( ($discount / $without_reduction) * 100, 2);
+
+                        if ($price == 0) {
+                            $discount = 0;
+                        } else {
+                            $discount = round( ($discount / $without_reduction) * 100, 2);
                         }
 
                         $price = $product->get_sale_price();

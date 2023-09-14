@@ -47,50 +47,52 @@ class Clientify_Plugin_Core
 	 */
 	function clientify_action_init()
 	{
-		global $wpdb;
-		if (is_plugin_active('woo-cart-abandonment-recovery/woo-cart-abandonment-recovery.php')) {
+		if(get_option('CLIENTIFY_STATUS') != 0){
+			global $wpdb;
+			if (is_plugin_active('woo-cart-abandonment-recovery/woo-cart-abandonment-recovery.php')) {
 
-			if ( is_plugin_active('woocommerce/woocommerce.php') ){
-				$cart_hour = (int)get_option('CLIENTIFY_CART_HOUR');
-				$sql = 'SELECT wccca.session_id FROM ' . $wpdb->prefix . 'cartflows_ca_cart_abandonment wccca ';
-				$sql .= 'LEFT JOIN ' . $wpdb->prefix . 'clientify_abandoned_cart wcac ON wccca.id = wcac.cartflows_id AND wccca.email = wcac.cartflows_email WHERE wcac.cartflows_id IS null AND wccca.order_status = "abandoned" AND TIMESTAMPDIFF(HOUR, wccca.time , now()) >= ' . $cart_hour;
-				$carts = $wpdb->get_results($sql);
+				if ( is_plugin_active('woocommerce/woocommerce.php') ){
+					$cart_hour = (int)get_option('CLIENTIFY_CART_HOUR');
+					$sql = 'SELECT wccca.session_id FROM ' . $wpdb->prefix . 'cartflows_ca_cart_abandonment wccca ';
+					$sql .= 'LEFT JOIN ' . $wpdb->prefix . 'clientify_abandoned_cart wcac ON wccca.id = wcac.cartflows_id AND wccca.email = wcac.cartflows_email WHERE wcac.cartflows_id IS null AND wccca.order_status = "abandoned" AND TIMESTAMPDIFF(HOUR, wccca.time , now()) >= ' . $cart_hour;
+					$carts = $wpdb->get_results($sql);
 
-				if ( !empty( $carts ) ) {
-					foreach ( $carts as $carts_results => $cart_data ) {					
-						$clientify_cart = $this->sync_hook_abandoned_cart($cart_data);
-						
-						$insert_clientify = $clientify_cart->data_insert;
-						
-						$search_abadonet_clientify = $wpdb->get_results('SELECT id_clientify_abandoned_cart FROM ' . $wpdb->prefix . 'clientify_abandoned_cart where cartflows_id = "' . $id_cartslow->id . '"');
-						
-						if( empty($search_abadonet_clientify) && $clientify_cart->status == 'success'){
+					if ( !empty( $carts ) ) {
+						foreach ( $carts as $carts_results => $cart_data ) {					
+							$clientify_cart = $this->sync_hook_abandoned_cart($cart_data);
+							
+							$insert_clientify = $clientify_cart->data_insert;
+							
+							$search_abadonet_clientify = $wpdb->get_results('SELECT id_clientify_abandoned_cart FROM ' . $wpdb->prefix . 'clientify_abandoned_cart where cartflows_id = "' . $id_cartslow->id . '"');
+							
+							if( empty($search_abadonet_clientify) && $clientify_cart->status == 'success'){
+										
+										$wpdb->insert($wpdb->prefix . "clientify_abandoned_cart", $insert_clientify);
 									
+							}elseif ($clientify_cart->status == 'error') {
+								$pattern = "/string=u'([^']+)'/";
+								if (preg_match($pattern, $clientify_cart->data, $matches)) {
+									$errorMessage = $matches[1];
+								}
+								if($errorMessage == 'Abandoned cart is already registered' && empty($search_abadonet_clientify)){
 									$wpdb->insert($wpdb->prefix . "clientify_abandoned_cart", $insert_clientify);
-								
-						}elseif ($clientify_cart->status == 'error') {
-							$pattern = "/string=u'([^']+)'/";
-							if (preg_match($pattern, $clientify_cart->data, $matches)) {
-								$errorMessage = $matches[1];
-							}
-							if($errorMessage == 'Abandoned cart is already registered' && empty($search_abadonet_clientify)){
-								$wpdb->insert($wpdb->prefix . "clientify_abandoned_cart", $insert_clientify);
+								}
 							}
 						}
 					}
 				}
-			}
 
-		}else{
-			if ( is_plugin_active('woocommerce/woocommerce.php') ){
-				$cart_hour = (int)get_option('CLIENTIFY_CART_HOUR');
-				$sql = 'SELECT DISTINCT c.cookie_cart_id, c.id_customer FROM ' . $wpdb->prefix . 'cart c ';
-				$sql .= 'LEFT JOIN ' . $wpdb->prefix . 'clientify_abandoned_cart cac ON (cac.cookie_cart_id = c.cookie_cart_id) OR (cac.id_customer = c.id_customer) WHERE cac.cookie_cart_id IS NULL AND cac.id_customer IS NULL AND TIMESTAMPDIFF(HOUR, c.date_add, now()) >= ' . $cart_hour;
-				$cookie_carts = $wpdb->get_results($sql);
-				$count = 0;
-				if ( !empty( $cookie_carts ) ) {
-					foreach ( $cookie_carts as $cookie_carts_results => $cart_data ) {					
-						$this->sync_hook_abandoned_cart($cart_data);
+			}else{
+				if ( is_plugin_active('woocommerce/woocommerce.php') ){
+					$cart_hour = (int)get_option('CLIENTIFY_CART_HOUR');
+					$sql = 'SELECT DISTINCT c.cookie_cart_id, c.id_customer FROM ' . $wpdb->prefix . 'cart c ';
+					$sql .= 'LEFT JOIN ' . $wpdb->prefix . 'clientify_abandoned_cart cac ON (cac.cookie_cart_id = c.cookie_cart_id) OR (cac.id_customer = c.id_customer) WHERE cac.cookie_cart_id IS NULL AND cac.id_customer IS NULL AND TIMESTAMPDIFF(HOUR, c.date_add, now()) >= ' . $cart_hour;
+					$cookie_carts = $wpdb->get_results($sql);
+					$count = 0;
+					if ( !empty( $cookie_carts ) ) {
+						foreach ( $cookie_carts as $cookie_carts_results => $cart_data ) {					
+							$this->sync_hook_abandoned_cart($cart_data);
+						}
 					}
 				}
 			}
@@ -570,36 +572,39 @@ class Clientify_Plugin_Core
 					$sub_categories= array();
 					$new_categories = [];
 					$terms = get_the_terms( $order_product['product_id'], 'product_cat' );
-					foreach ( $terms as $term ) {
-						if ( $term->parent == 0 ){                                           
-							$categories[] = $term->term_id.":".$term->slug;
-						}else{
-							foreach ( $categories as $cat ) {
-								$cat_data = explode(":",$cat);													
-								(int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
-							}
-							if( !$cat ){                            
-								$term_search = get_term_by('id', $term->parent, 'product_cat');
-								if( $term_search->parent == 0 ){
-									$categories[] = $term_search->term_id.":".$term_search->slug;
+					$cat = 0;
+					if($terms){
+						foreach ( $terms as $term ) {
+							if ( $term->parent == 0 ){                                           
+								$categories[] = $term->term_id.":".$term->slug;
+							}else{
+								foreach ( $categories as $cat ) {
+									$cat_data = explode(":",$cat);													
+									(int)$cat_data[0] == $term->parent ? $cat = true : $cat = false;
 								}
-								else{
-									$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
-								}                            
-							}
-							if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
-									$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
-								}
-							foreach ( $categories as $key => $value ) {                            
-								foreach( $sub_categories as $key => $value_sub ){
-									$explode = explode("|", $value_sub);
-									$arr = array($explode[0]);
-									if (in_array($value, $arr)) {
-										unset( $categories[$key] );
+								if( !$cat ){                            
+									$term_search = get_term_by('id', $term->parent, 'product_cat');
+									if( $term_search->parent == 0 ){
+										$categories[] = $term_search->term_id.":".$term_search->slug;
 									}
-								}                            
-							}                        
-						}          
+									else{
+										$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
+									}                            
+								}
+								if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
+										$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+									}
+								foreach ( $categories as $key => $value ) {                            
+									foreach( $sub_categories as $key => $value_sub ){
+										$explode = explode("|", $value_sub);
+										$arr = array($explode[0]);
+										if (in_array($value, $arr)) {
+											unset( $categories[$key] );
+										}
+									}                            
+								}                        
+							}          
+						}
 					}
 					$product = $order_product->get_product();
 					$sku = $product->get_sku();
@@ -623,7 +628,11 @@ class Clientify_Plugin_Core
 							$new_categories[] = $cat_clean;
 					}  
 					$join_cat = implode(",",$new_categories)."/".implode(",",$sub_categories);
-					$discount = ($discount_price * 100) / $price;
+					if ($price == 0) {
+                        $discount = 0;
+                    } else {
+                        $discount = ($discount_price * 100) / $price;
+                    }
 					$items[] = array(
 						'name'        => $order_product->get_name(),
 						'id'          => $product_id,
@@ -639,9 +648,114 @@ class Clientify_Plugin_Core
 
 				}
 
+				$contact = 0;
+				
+				if ($id_customer){
+					$contact = $this->get_contact($id_customer);
+				}else{
+					if ( $order->get_billing_first_name() || $order->get_billing_last_name() ) {
+						$customer_phones = array();
+						$contact = array(
+							'email' => '',
+							'contact_source'  => get_option('blogname'),
+							'custom_fields'   => [],
+							'tags'            => array(
+													'woocommerce'
+												)
+						);
+						if ( !empty($order->get_billing_email()) ) {
+							$contact['email'] = $order->get_billing_email();
+						}
+						if ( !empty($order->get_billing_first_name()) ) {
+							$contact['first_name'] = $order->get_billing_first_name();
+						}
+						if ( !empty($order->get_billing_last_name()) ) {
+							$contact['last_name'] = $order->get_billing_last_name();
+						}
+						if ( !empty($order->get_billing_company()) ) {
+							$contact['company'] = $order->get_billing_company();
+						}
+
+						$customer_address = array('type' => 1);
+						$street = $order->get_billing_address_1() . (!empty($order->get_billing_address_2()) ? ', ' . $order->get_billing_address_2() : '');
+						if ( !empty($street) ) {
+							$customer_address['street'] = $street;
+						}
+						if ( !empty($order->get_billing_city()) ) {
+							$customer_address['city'] = $order->get_billing_city();
+						}
+						if ( !empty($order->get_billing_state()) ) {
+							$customer_address['state'] = $order->get_billing_state();
+						}
+						if ( !empty($order->get_billing_postcode()) ) {
+							$customer_address['postal_code'] = $order->get_billing_postcode();
+						}
+						if ( !empty($order->get_billing_country()) ) {
+							$customer_address['country'] = $order->get_billing_country();
+						}
+						$contact['addresses'][] = $customer_address;
+						if ( !empty($order->get_billing_phone()) && !in_array($order->get_billing_phone(), $customer_phones ) ) {
+							$contact['phones'][] = array('phone' => $order->get_billing_phone());
+							$customer_phones[] = $order->get_billing_phone();
+						}
+						if ( !empty($lang) ) {
+							$contact['custom_field'] = array(
+								'field' => 'ecommerce_language',
+								'value' => $lang,
+							);
+						}
+					}elseif ( $order->get_shipping_first_name() || $order->get_shipping_last_name() ) {
+						$customer_phones = array();
+						$contact = array(
+							'email' => '',
+							'contact_source'  => get_option('blogname'),
+							'custom_fields'   => [],
+							'tags'            => array(
+													'woocommerce'
+												)
+						);
+			
+						if ( !empty($order->get_shipping_first_name()) ) {
+							$contact['first_name'] = $order->get_shipping_first_name();
+						}
+						if ( !empty($order->get_shipping_last_name()) ) {
+							$contact['last_name'] = $order->get_shipping_last_name();
+						}
+						if ( !empty($order->get_shipping_company()) ) {
+							$contact['company'] = $order->get_shipping_company();
+						}
+
+						$customer_address = array('type' => 1);
+						$street = $order->get_shipping_address_1() . (!empty($order->get_shipping_address_2()) ? ', ' . $order->get_shipping_address_2() : '');
+						if ( !empty($street) ) {
+							$customer_address['street'] = $street;
+						}
+						if ( !empty($order->get_shipping_city()) ) {
+							$customer_address['city'] = $order->get_shipping_city();
+						}
+						if ( !empty($order->get_shipping_state()) ) {
+							$customer_address['state'] = $order->get_shipping_state();
+						}
+						if ( !empty($order->get_shipping_postcode()) ) {
+							$customer_address['postal_code'] = $order->get_shipping_postcode();
+						}
+						if ( !empty($order->get_shipping_country()) ) {
+							$customer_address['country'] = $order->get_shipping_country();
+						}
+						$contact['addresses'][] = $customer_address;
+						
+						if ( !empty($lang) ) {
+							$contact['custom_field'] = array(
+								'field' => 'ecommerce_language',
+								'value' => $lang,
+							);
+						}
+					}
+				}
+
 				$data = array(
 
-					'contact'    => $this->get_contact($id_customer),
+					'contact'    => $contact,
 					'status'     => 'ordered',
 					'order_date' => $order_data['date_created']->date('Y-m-d H:i:s'),
 					'order_id'   => $order->get_id(),
