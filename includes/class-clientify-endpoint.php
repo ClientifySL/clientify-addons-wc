@@ -252,7 +252,7 @@ class Clientify_Endpoint {
 				if ($id_customer){
 					$contact = $this->get_contact($id_customer);
 				}else{
-					if ( $order->get_billing_first_name() && $order->get_billing_last_name() ) {
+					if ( $order->get_billing_first_name() || $order->get_billing_last_name() ) {
 						$customer_phones = array();
 						$contact = array(
 							'email' => '',
@@ -303,7 +303,7 @@ class Clientify_Endpoint {
 								'value' => $lang,
 							);
 						}
-					}elseif ( $order->get_shipping_first_name() && $order->get_shipping_last_name() ) {
+					}elseif ( $order->get_shipping_first_name() || $order->get_shipping_last_name() ) {
 						$customer_phones = array();
 						$contact = array(
 							'email' => '',
