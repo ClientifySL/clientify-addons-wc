@@ -239,9 +239,9 @@ class Clientify_Endpoint {
                         'sku'         => $sku,
                         'image_url'   => $image_url,
                         'item_url'    => get_permalink($order_product['product_id']),
-                        'price'       => $price,
+                        'price'       => number_format($price, 2, '.', ','),
                         'quantity'    => $order_product->get_quantity(),
-                        'discount'    => $discount != 0 ? round($discount) : 0, //$discount
+                        'discount'    => $discount != 0 ? number_format(round($discount), 1, '.', ',') : 0, //$discount
                     );
                 }
                 //total discount
@@ -362,9 +362,9 @@ class Clientify_Endpoint {
                     'store_url' => $url_base,
                     'currency' => $currency,
                     'products' => $items,
-                    'price' => $total_price,
+                    'price' =>  number_format($total_price, 2, '.', ','),
                     'shipping' => $order_data['shipping_total'],
-                    'coupon' => $order_discount_total ? $order_discount_total : 0,
+                    'coupon' => $order_discount_total ?  number_format($order_discount_total, 2, '.', ','): 0,
 
                 );
                 
@@ -744,7 +744,7 @@ class Clientify_Endpoint {
                 'sku'         => $sku,
                 'image_url'   => $image_url,
                 'item_url'    => get_permalink($product->id),
-                'price'       => $product->regular_price == '' ||   $product->regular_price == NULL ? 0 : $product->regular_price,
+                'price'       => $product->regular_price == '' ||   $product->regular_price == NULL ? 0 : number_format($product->regular_price, 2, '.', ','),
                 'currency'    => get_woocommerce_currency()
                 
             );
@@ -889,7 +889,7 @@ class Clientify_Endpoint {
 							'sku'         => $product->get_sku(),
 							'image_url'   => get_the_post_thumbnail_url($product_id),
 							'item_url'    => $product->get_permalink($cart_item),
-							'price'       => $price,
+							'price'       => number_format($price, 2, '.', ','),
 							'quantity'    => (int) $cart_item['quantity'],
 							'discount'    => $discount,
 						);
@@ -906,7 +906,7 @@ class Clientify_Endpoint {
 					'currency'       => get_option('woocommerce_currency'),
 					'store_url'      => $url_base,
 					'products'       => $items,
-					'price'	         => $details->cart_total,
+					'price'	         => number_format($details->cart_total, 2, '.', ','),
 					'shipping'	     => $shipping,
 					'coupon'         =>  0
 					
@@ -1090,7 +1090,7 @@ class Clientify_Endpoint {
                             'item_url'    => $product->get_permalink($cart_item),
                             'price'       => $price,
                             'quantity'    => $cart_item->quantity,
-                            'discount'    => 0,
+                            'discount'    =>  number_format($discount, 1, '.', ','),
                         );		
                     }
                     $cart_page_id = wc_get_page_id( 'cart' );

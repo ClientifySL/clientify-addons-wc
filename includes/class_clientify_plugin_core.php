@@ -516,7 +516,7 @@ class Clientify_Plugin_Core
 			'id'                  => $product_id,
 			'name'                => $product->get_name(),
 			'description'         => $product_full_description,
-			'price'               => $price == 0 ? 0 : $price,
+			'price'               => $price == 0 ? 0 : number_format($price, 2, '.', ','),
 			'item_url'            => get_permalink($product_id),
 			'currency'            => get_option('woocommerce_currency'),
 			'category'            => $join_cat,
@@ -641,9 +641,9 @@ class Clientify_Plugin_Core
 						'sku'         => $sku,
 						'image_url'   => $image_url,
 						'item_url'    => get_permalink($order_product['product_id']),
-						'price'       => $price,
+						'price'       => number_format($price, 2, '.', ','),
 						'quantity'    => $order_product->get_quantity(),
-						'discount'    => $discount != 0 ? $discount : 0, //$discount
+						'discount'    => $discount != 0 ?  number_format(round($discount), 1, '.', ',') : 0, //$discount
 					);
 
 				}
@@ -766,7 +766,7 @@ class Clientify_Plugin_Core
 					'currency'   => $currency,
 					'products'   => $items,
 					'shipping' 	 => $order_data['shipping_total'],
-					'price'	     => $total_price,
+					'price'	     => number_format($total_price, 2, '.', ','),
 					'coupon'     => 0,
 				);
 				if (!empty($lang)) {
@@ -1007,7 +1007,7 @@ class Clientify_Plugin_Core
 							'sku'         => $product->get_sku(),
 							'image_url'   => get_the_post_thumbnail_url($product_id),
 							'item_url'    => $product->get_permalink($cart_item),
-							'price'       => $price,
+							'price'       => number_format($price, 2, '.', ','),
 							'quantity'    => (int) $cart_item['quantity'],
 							'discount'    => $discount,
 						);
@@ -1024,7 +1024,7 @@ class Clientify_Plugin_Core
 					'currency'       => get_option('woocommerce_currency'),
 					'store_url'      => $url_base,
 					'products'       => $items,
-					'price'	         => $details->cart_total,
+					'price'	         => number_format($details->cart_total, 2, '.', ','),
 					'shipping'	     => $shipping,
 					'coupon'         =>  0
 					
@@ -1198,7 +1198,7 @@ class Clientify_Plugin_Core
 						'item_url'    => $product->get_permalink($cart_item),
 						'price'       => $price,
 						'quantity'    => $cart_item->quantity,
-						'discount'    => 0,
+						'discount'    =>  number_format($discount, 1, '.', ','),
 					);		
 				}
 				$cart_page_id = wc_get_page_id( 'cart' );
