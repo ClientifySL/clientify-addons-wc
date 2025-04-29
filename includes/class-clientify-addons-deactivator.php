@@ -32,29 +32,29 @@ class Clientify_Addons_Deactivator {
 	public static function deactivate() {
 
 
-		require_once plugin_dir_path(dirname(__FILE__)) . 'includes/RegisterCustomPostType.php';
-		/* notify Deactivate plugin in store */
-		$deactivate = new RegisterCustomPostType;
-
-		
-		$endpoint_class = new CustomClientifyEndPoint();
-		$api = new ClientifyApi;
-
+		require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class_clientify_plugin_core.php';
+	
+		$endpoint_class = new Clientify_Endpoint();
+		$api = new Clientify_Api;
 		$key_uid = get_option('CLIENTIFY_STORE_KEY');
-		$url_base = $endpoint_class->GetApiUrl();
+		$url_base = $endpoint_class->get_local_api_url();
 		$key = get_option('CLIENTIFY_API_KEY');
 		$post_key = array(
 			'ecommerce' => 'woocommerce',
 			'store_key' => $key_uid,
-			'action' 	=> 'deactivate',
+			'action' 	=> 'uninstall',
 			'name' 		=> get_option('blogname'),
 			'store_url' => $url_base
 		);
-		$api->Post_Base_Clientify($post_key,$key);
-		//$deactivate->disconnect_clientify();
+		
+		global $wpdb;
+		// Delete clientify log table
+		$table_logs = $wpdb->prefix . 'clientify_logs';
+		$wpdb->query("DROP TABLE IF EXISTS $table_logs");
+
+		$api->post_base_clientify($post_key,$key);
 		update_option('CLIENTIFY_STATUS', 0);
-
-
+		update_option('CLIENTIFY_SCRIPT', 0);
 		wp_clear_scheduled_hook('clientify_job');
 	}
 

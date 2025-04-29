@@ -1,10 +1,83 @@
+=== Clientify-Ecommerce ===
+Contributors: CLIENTIFY® Development team
+Tags: woocommerce, clientify, integration, CRM, ecommerce
+Requires at least: 4.0
+Tested up to: 6.2.2
+Requires PHP: 7.0
+Stable tag: 1.0.0
+License: GPL-2.0-or-later
+License URI: https://www.gnu.org/licenses/gpl-2.0.html
+
+Integrate WooCommerce actions with Clientify for syncing orders, products, customers, and abandoned carts.
+
+== Description ==
+
+The Clientify-Ecommerce plugin allows you to integrate WooCommerce actions with Clientify, a CRM, to facilitate data synchronization. With this integration, you can automatically send information about orders, products, customers, and abandoned carts to your Clientify account.
+
+= Screenshots =
+
+[Attach some screenshots here showcasing your plugin in action]
+
+= Requirements =
+
+- WordPress 4.0 or higher
+- WooCommerce 3.0 or higher
+- An active account on Clientify
+
+== Installation Instructions ==
+
+1. Download the plugin zip file to your computer.
+2. Log in to your WordPress admin panel.
+3. Go to "Plugins" in the sidebar menu.
+4. Click on "Add New" and then "Upload Plugin".
+5. Select the plugin zip file you downloaded and click "Install Now".
+6. Once installed, activate the plugin.
+7. In the sidebar, you will find the "Clientify" option. Click on it to access the settings.
+8. Enter your Clientify API Key and click the "Connect" button.
+9. If the data is correct, you will receive a successful connection notification, and a new tab will open to the Clientify app. If there is an error, you will be notified of the issue.
+10. If you want to disconnect the integration, you can do so at any time from the plugin settings.
+
+== Usage ==
+
+1. After successfully connecting your Clientify account, the plugin will automatically send information about orders, products, customers, and abandoned carts to your CRM.
+2. Make sure WooCommerce is properly configured, and relevant events (such as completing a purchase or cart abandonment) trigger the appropriate actions in your store.
+
+== FAQ (Frequently Asked Questions) ==
+
+Q: What should I do if I get a connection error when trying to connect with Clientify?
+A: Make sure the API Key you entered is correct. If the problem persists, please contact Clientify support at development@clientify.com.
+
+Q: How can I disconnect the integration with Clientify?
+A: Go to the Clientify plugin settings and click the "Disconnect" button. This will prevent data from being sent to your Clientify account.
+
+== Support ==
+
+For support, please contact the Clientify development team by sending an email to development@clientify.com.
+
+== Contribution ==
+
+Due to our current policies, we do not accept contributions from third parties.
+
+== License ==
+
+GPL used for WordPress plugins is GPL-2.0 (or later).
+
+
+
+
+
+
+
+
+
+
+
 === Plugin Name ===
-Contributors: (this should be a list of wordpress.org userid's)
-Donate link: Emerson Ramirez
-Tags: comments, spam
-Requires at least: 3.0.1
-Tested up to: 3.4
-Stable tag: 4.3
+Contributors: 
+Tags: ecommerce, clientify
+Requires at least: 5.8.7
+Tested up to: 6.2.2
+Stable tag: 6.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 

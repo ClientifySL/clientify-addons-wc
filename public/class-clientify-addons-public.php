@@ -74,6 +74,7 @@ class Clientify_Addons_Public {
 		 */
 
 		wp_enqueue_style( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'css/clientify-addons-public.css', array(), $this->version, 'all' );
+		// wp_enqueue_style( 'prefix_initial', 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.7/build/css/intlTelInput.css', array(), $this->version, 'all' );
 
 	}
 
@@ -96,9 +97,27 @@ class Clientify_Addons_Public {
 		 * class.
 		 */
 
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/clientify-addons-public.js', array( 'jquery' ), $this->version, false );
-		wp_localize_script($this->plugin_name, 'clientify_ajax', array('ajax_url' => admin_url('admin-ajax.php')));
+		//wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/clientify-addons-public.js', array( 'jquery' ), $this->version, false );
+		//wp_localize_script($this->plugin_name, 'clientify_ajax', array('ajax_url' => admin_url('admin-ajax.php')));
 
+		$vars = array(
+		'ajaxurl'                   => admin_url( 'admin-ajax.php' ),
+		'_nonce'                    => wp_create_nonce( 'clientify_save_cart_abandonment_data' ),
+		'_gdpr_nonce'               => wp_create_nonce( 'clientify_skip_cart_tracking_gdpr' ),
+		'_post_id'                  => get_the_ID(),
+		'_show_gdpr_message'        => ( '' ),
+		'_gdpr_message'             => get_option( 'wcf_ca_gdpr_message' ),
+		'_gdpr_nothanks_msg'        => __( 'No Thanks', 'woo-cart-abandonment-recovery' ),
+		'_gdpr_after_no_thanks_msg' => __( 'You won\'t receive further emails from us, thank you!', 'woo-cart-abandonment-recovery' ),
+		'enable_ca_tracking'        => true,
+	);
+
+
+
+    wp_enqueue_script('clientify-script', plugins_url('../public/js/clientify-addons-public.js', __FILE__), array('jquery','prefix_script'), '1.0', true);
+	wp_localize_script( 'clientify-script', 'clientify_wcf_ca_vars', $vars );
+	wp_localize_script('clientify-script', 'clientify_ajax', array('ajax_url' => admin_url('admin-ajax.php')));
+	wp_enqueue_script( 'prefix_script', 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.7/build/js/intlTelInput.min.js', array( 'jquery' ), $this->version, false );
 	}
 
 }
