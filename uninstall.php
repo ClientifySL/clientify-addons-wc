@@ -29,25 +29,15 @@
 if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
-// $endpoint_class = new CustomClientifyEndPoint();
-// $api = new ClientifyApi;
-
-
-
-
-//$key_uid = $endpoint_class->token_id();
-//$url_base = $endpoint_class->GetApiUrl();
-// require_once plugin_dir_path(dirname(__FILE__)) . 'includes/Api.php';
-// $api = new ClientifyApi;
-// $post_key = array(
-// 	'ecommerce' => 'woocommerce',
-// 	//'store_key' => $key_uid,
-// 	'action' 	=> 'uninstall plugin',
-// 	//'base_url'  => $url_base
-// );
-// $api->Post_Base_Clientify($post_key);
-
 /* reset Key and clientify api key    */
-update_option('CLIENTIFY_API_KEY', '');
-update_option('CLIENTIFY_STORE_KEY', '');
+delete_option('CLIENTIFY_API_KEY');
+delete_option('CLIENTIFY_STORE_KEY');
+delete_option('CLIENTIFY_API_KEY');
+delete_option('CLIENTIFY_API_LOG');
+delete_option('CLIENTIFY_SCRIPT');
+delete_option('CLIENTIFY_BOTTOM_SCRIPT');
+delete_option('CLIENTIFY_ORDER_STATUS');
+delete_option('CLIENTIFY_CART_HOUR');
+delete_option('CLIENTIFY_STORE_KEY');
+delete_option('CLIENTIFY_STATUS');
 
