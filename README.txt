@@ -3,8 +3,8 @@ Contributors: CLIENTIFY® Development team
 Tags: woocommerce, clientify, integration, CRM, ecommerce
 Requires at least: 4.0
 Tested up to: 6.2.2
-Requires PHP: 7.0
-Stable tag: 1.0.0
+Requires PHP: 7.4.2
+Stable tag: 1.1.0
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -21,7 +21,7 @@ The Clientify-Ecommerce plugin allows you to integrate WooCommerce actions with 
 = Requirements =
 
 - WordPress 4.0 or higher
-- WooCommerce 3.0 or higher
+- WooCommerce 7.0 or higher
 - An active account on Clientify
 
 == Installation Instructions ==
@@ -61,16 +61,6 @@ Due to our current policies, we do not accept contributions from third parties.
 == License ==
 
 GPL used for WordPress plugins is GPL-2.0 (or later).
-
-
-
-
-
-
-
-
-
-
 
 === Plugin Name ===
 Contributors: 
