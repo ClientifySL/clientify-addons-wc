@@ -789,7 +789,8 @@ function agregar_opcion_suscripcion($menu_items) {
 				$lang = get_bloginfo("language");
 				$products = $order->get_items();
 				$currency = $order->get_currency();
-
+				$order_tags = array();
+				
 				foreach ( $products as $order_product ) {
 
 					$categories = array();
@@ -1062,6 +1063,11 @@ function agregar_opcion_suscripcion($menu_items) {
 				}
 
 				$coupons = $order->get_coupon_codes();
+				$tipo_orden = $order->get_meta('tipodeorden');
+                if (!empty($tipo_orden) && !in_array($tipo_orden, $order_tags)) {
+                    $order_tags[] = $tipo_orden;
+                }
+            
 
 				$data = array(
 
@@ -1078,6 +1084,7 @@ function agregar_opcion_suscripcion($menu_items) {
 					'shipping' 	 => $shipping,
 					'price'	     =>  number_format($total_price, 2, '.', ''),
 					'coupon'     => 0,
+					'order_tags' => $order_tags
 				);
 
 				if ($coupons) {

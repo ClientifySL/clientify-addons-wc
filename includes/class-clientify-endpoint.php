@@ -224,6 +224,7 @@ class Clientify_Endpoint {
                 $products = $order->get_items();         
                 $items = array();
                 $coupons_tags = array();
+                $order_tags = array();
 
                 foreach ( $products as $order_product ) {
                     $categories = array();
@@ -431,6 +432,11 @@ class Clientify_Endpoint {
 				}
 
                 $coupons = $order->get_coupon_codes();
+                $tipo_orden = $order->get_meta('tipodeorden');
+                if (!empty($tipo_orden) && !in_array($tipo_orden, $order_tags)) {
+                    $order_tags[] = $tipo_orden;
+                }
+            
 				
                 $data = array(
                     'contact' => $contact,
@@ -446,6 +452,7 @@ class Clientify_Endpoint {
                     'price' =>  number_format($total_price, 2, '.', ''),
                     'shipping' => $shipping,
                     'coupon' => $order_discount_total,
+                    'order_tags' => $order_tags
                     );
 
                     if ($coupons) {
@@ -1574,6 +1581,7 @@ class Clientify_Endpoint {
                 $products = $order->get_items();         
                 $items = array();
                 $coupons_tags = array();
+                $order_tags = array();
 
                 foreach ( $products as $order_product ) {
                     $categories = array();
@@ -1780,6 +1788,10 @@ class Clientify_Endpoint {
 				}
 				
                 $coupons = $order->get_coupon_codes();
+                $tipo_orden = $order->get_meta('tipodeorden');
+                if (!empty($tipo_orden) && !in_array($tipo_orden, $order_tags)) {
+                    $order_tags[] = $tipo_orden;
+                }
 
                 $data = array(
                     'contact' => $contact,
@@ -1794,7 +1806,8 @@ class Clientify_Endpoint {
                     'products' => $items,
                     'price' =>  $total_price,
                     'shipping' => $shipping,
-                    'coupon' => 0,
+                    'coupon' => $order_discount_total,
+                    'order_tags' => $order_tags
                     );
 
                     if ($coupons) {
