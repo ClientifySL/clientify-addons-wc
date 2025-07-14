@@ -225,7 +225,7 @@ class Clientify_Addons {
 				set_error_handler(array($plugin_logs, 'handle_errors_php'));
 				set_exception_handler(array($plugin_logs, 'handle_exceptions'));
 				register_shutdown_function(array($plugin_logs, 'handling_fatal_errors'));
-				add_filter('wp_die_handler', array($plugin_logs, 'handle_errors_wp'));
+				// add_filter('wp_die_handler', array($plugin_logs, 'handle_errors_wp'));
 			}
 
 			// add gdpr

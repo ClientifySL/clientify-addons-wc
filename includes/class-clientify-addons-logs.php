@@ -13,7 +13,9 @@ if (!defined('ABSPATH')) {
 class Clientify_Addons_Logs {
     
 
-        //code...
+        private static function is_plugin_file($file_path) {
+            return strpos($file_path, 'wp-content/plugins/clientify-addons') !== false;
+        }
     
         /**
          * Insert a log in the database.
@@ -43,15 +45,21 @@ class Clientify_Addons_Logs {
          * Handle PHP errors.
          */
         public static function handle_errors_php($errno, $errstr, $errfile, $errline) {
+            if (!self::is_plugin_file($errfile)) {
+                return false; // Ignorar si no es de nuestro plugin
+            }
             $level = self::get_error_level($errno);
             self::insert_log($level, $errstr, $errfile, $errline);
         }
-    
         /**
          * Handling uncaught exceptions.
          */
         public static function handle_exceptions($exception) {
-            self::insert_log('EXCEPTION', $exception->getMessage(), $exception->getFile(), $exception->getLine());
+            $file = $exception->getFile();
+            if (!self::is_plugin_file($file)) {
+                return false;
+            }
+            self::insert_log('EXCEPTION', $exception->getMessage(), $file, $exception->getLine());
         }
     
         /**
@@ -60,6 +68,9 @@ class Clientify_Addons_Logs {
         public static function handling_fatal_errors() {
             $error = error_get_last();
             if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
+                if (!self::is_plugin_file($error['file'])) {
+                    return false;
+                }
                 $level = self::get_error_level($error['type']);
                 self::insert_log($level, $error['message'], $error['file'], $error['line']);
             }
@@ -94,6 +105,15 @@ class Clientify_Addons_Logs {
                 self::insert_log('WP_DIE', $message);
                 die($message); // O manejarlo de otra forma
             };
+        }
+
+        public static function cleanup_logs($days = 30) {
+            global $wpdb;
+            $table_name = $wpdb->prefix . 'clientify_logs';
+            $wpdb->query($wpdb->prepare(
+                "DELETE FROM $table_name WHERE timestamp < NOW() - INTERVAL %d DAY", 
+                $days
+            ));
         }
     
 }
