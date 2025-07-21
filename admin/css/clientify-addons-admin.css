@@ -86,7 +86,7 @@ form, .general {
 }
 
 header {
-    background-color: #4fafde;
+    background-color: #0067EE;
     color: white;
 }
 
@@ -193,7 +193,7 @@ h2.heading {
     height: 0;
 }
 .color-nav{
-    color: #25b9d7;
+    color: #052451;
     text-decoration: none;
 }
 .controls input[type="text"],
@@ -382,4 +382,44 @@ h2.heading {
 .label_gdpr{
     top: 0 !important;
     left: 15px !important;
+}
+
+.clientify-btn {
+  padding: 10px 24px;
+  font-size: 15px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  color: #fff;
+  margin-right: 10px;
+}
+
+.clientify-btn-primary {
+  background-color: #0069ff;
+}
+
+.clientify-btn-primary:hover {
+  background-color: #0057d9;
+}
+
+.clientify-btn-secondary {
+  background-color: #dc3545;
+}
+
+.clientify-btn-secondary:hover {
+  background-color: #c82333;
+}
+
+.clientify-button-wrapper {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    max-width: none !important;
+    text-align: center;
+    width: 100%;
+}
+.clientify-button-wrapper .clientify-btn {
+    display: inline-block;
+    margin: 0 10px;
 }
