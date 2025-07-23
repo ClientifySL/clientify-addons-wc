@@ -7,8 +7,8 @@ if (!class_exists('Clientify_Api')) {
     {
         var $api_key;
 
-        var $api_url = 'https://api.clientify.net/';
-        // var $api_url = 'https://ecommerce-aly.ngrok.io/';
+        var $api_url = 'https://plus.clientify.com/';
+        // var $api_url = 'https://ecommerce.ngrok.io/';
 
         public function __construct()
         {
@@ -18,7 +18,7 @@ if (!class_exists('Clientify_Api')) {
         public function post_base_clientify($data, $key)
         {
             $response = wp_remote_post(
-                $this->api_url . 'ecommerce/v2/connection_by_plugin/',
+                $this->api_url . 'api/ecommerce/v2/connection_by_plugin/',
                 array(
                     'body' => json_encode($data),
                     'headers' => array(
@@ -67,7 +67,7 @@ if (!class_exists('Clientify_Api')) {
         public function post_contacts_clientify($data)
         {
             $response = wp_remote_post(
-                $this->api_url . 'ecommerce/v2/woocommerce_listener',
+                $this->api_url . 'api/ecommerce/v2/woocommerce_listener',
                 array(
                     'body' => json_encode($data),
                     'headers' => array(
@@ -84,6 +84,9 @@ if (!class_exists('Clientify_Api')) {
                     'message' => $response->get_error_message(),
                     'data'    => $response->get_error_data(), // Si hay datos adicionales
                 ];
+            }
+            else{
+                return $response;
             }
 
             return json_decode(wp_remote_retrieve_body($response));

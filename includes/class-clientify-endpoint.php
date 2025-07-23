@@ -490,12 +490,14 @@ class Clientify_Endpoint {
     {
         global $wpdb;
         $param = $params->get_param('hook');
-        
+        $abandoned_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';
+        $abandoned_card_exists = $wpdb->get_var( $wpdb->prepare("SHOW TABLES LIKE %s", $abandoned_table)) === $abandoned_table;
+
         if( $param=='all' ) {
             $status= array(
                 'pixel_script'   => $this->find_filter('wp_footer','clientify_api_script'),
-                'abandoned_card' => $this->find_filter('clientify_job','clientify_action_init'),
-                'contac'         => $this->find_filter('user_register','customer_add'),
+                'abandoned_card' => $abandoned_card_exists,
+                'contac'         => $this->find_filter('woocommerce_created_customer','customer_add'),
                 'order'          => $this->find_filter('woocommerce_order_status_changed','sync_hook_order'),
                 'product'        => $this->find_filter('woocommerce_new_product','product_published')                
             );
@@ -553,10 +555,10 @@ class Clientify_Endpoint {
             update_option('CLIENTIFY_STATUS', 1);
 
             if ( get_option('CLIENTIFY_STATUS') == 1 ) {
-                return new WP_REST_Response(array('message' => 'success','api_response' => $response,'data'=> $post_key), 200);
+                return new WP_REST_Response(array('message' => 'success','api_response' => $post_key,'data'=> $post_key), 200);
             }
             else{
-                return new WP_REST_Response(array('message' => 'error', 'api_response' => $response), 500);
+                return new WP_REST_Response(array('message' => 'error', 'api_response' => $post_key), 500);
             }  
 
         }elseif ( $set_send == "disconnect" ) {
