@@ -162,7 +162,7 @@ jQuery(document).ready(function () {
 									btnconnect.attr("disabled", true).text("Conectado").addClass('connected');
 									form.submit();
 									$("#key").focus();
-									var win = window.open('http://app.clientify.com/ecommerce/settingsv2/list-store/woocommerce', '_blank');	
+									var win = window.open('https://new.clientify.com/sales/ecommerce', '_blank');	
 								}
 								if ( response == '' || response == 0 ) {
 										statusMessage('Error al conectar Clientify API Key Vacía','error');

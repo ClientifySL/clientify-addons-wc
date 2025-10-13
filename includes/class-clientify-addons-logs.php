@@ -107,7 +107,7 @@ class Clientify_Addons_Logs {
             };
         }
 
-        public static function cleanup_logs($days = 30) {
+        public static function cleanup_logs($days = 5) {
             global $wpdb;
             $table_name = $wpdb->prefix . 'clientify_logs';
             $wpdb->query($wpdb->prepare(
