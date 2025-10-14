@@ -603,13 +603,12 @@ class Clientify_Endpoint {
     public function sync_all_customer($params){
 
         $created_at_min = date("Y-m-d", strtotime($params->get_param('created_at_min')));
-        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d') : date('Y-m-d', strtotime($params->get_param('created_at_end')));
-        $per_page = intval($params->get_param('per_page'));
+        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d') : date("Y-m-d", strtotime($params->get_param('created_at_end')));
+        $per_page = intval($params->get_param('per_page', 25));
         $paged = intval($params->get_param('page', 1));
-        $url_base = $this->get_local_api_url();
         global $wpdb;
-        $user_role = 'customer';
-        
+        $contacts_all = array();
+
         $query = $wpdb->prepare(
             "SELECT u.ID
             FROM {$wpdb->users} AS u
@@ -617,24 +616,43 @@ class Clientify_Endpoint {
             WHERE DATE(u.user_registered) BETWEEN %s AND %s
             AND um.meta_key = '{$wpdb->prefix}capabilities'
             AND um.meta_value LIKE %s
-            ORDER BY u.user_registered ASC
-            LIMIT %d OFFSET %d",
+            ORDER BY u.user_registered ASC",
+
             $created_at_min,
             $created_at_end,
-            '%"'.$user_role.'"%',
-            $per_page,
-            ($paged - 1) * $per_page
+            '%"customer"%'
         );
-        
         $users = $wpdb->get_results($query);
-        $contacts = array(); 
-        
-        foreach ( $users as $customer_to_sync ) {
-            $customer = $this->get_contact($customer_to_sync->ID);
-            $contacts[] = $customer;
+
+        foreach ($users as $customer) {
+            $contacts_all[] = $this->get_contact($customer->ID);
         }
 
-        $response = new WP_REST_Response($contacts, 200);        
+        $args_orders = array(
+            'limit'        => -1,
+            'date_created' => $created_at_min . '...' . $created_at_end,
+            'orderby'      => 'date',
+            'order'        => 'ASC',
+        );
+        $orders = wc_get_orders($args_orders);
+
+        foreach ($orders as $order) {
+            if ((int) $order->get_user_id() === 0) {
+                $guest_data = $this->get_guest_contact($order);
+                if (isset($guest_data['email'])) {
+                    $emails_existing = array_column($contacts_all, 'email');
+                    if (!in_array($guest_data['email'], $emails_existing)) {
+                        $contacts_all[] = $guest_data;
+                    }
+                }
+            }
+        }
+
+        $total_items = count($contacts_all);
+        $offset = ($paged - 1) * $per_page;
+        $contacts_paginated = array_slice($contacts_all, $offset, $per_page);
+
+        $response = new WP_REST_Response($contacts_paginated, 200);        
         return $response;
     }
 
@@ -763,6 +781,61 @@ class Clientify_Endpoint {
         }
         return $data;
     }
+
+    /* get guest contact from WC_Order */
+    function get_guest_contact($order) {
+        $billing_email = $order->get_billing_email();
+        $billing_first_name = $order->get_billing_first_name();
+        $billing_last_name = $order->get_billing_last_name();
+        $billing_phone = $order->get_billing_phone();
+        $billing_address_1 = $order->get_billing_address_1();
+        $billing_address_2 = $order->get_billing_address_2();
+        $billing_city = $order->get_billing_city();
+        $billing_state = $order->get_billing_state();
+        $billing_postcode = $order->get_billing_postcode();
+        $billing_country = $order->get_billing_country();
+        $billing_company = $order->get_billing_company();
+        $site_name = get_option('blogname');
+        $lang = get_bloginfo("language");
+
+        $street = $billing_address_1 . (!empty($billing_address_2) ? ', ' . $billing_address_2 : '');
+
+        $guest_data = array(
+            'id_customer'    => 0,
+            'email'          => $billing_email,
+            'first_name'     => $billing_first_name,
+            'last_name'      => $billing_last_name,
+            'contact_source' => $site_name,
+            'custom_fields'  => [],
+            'tags'           => array('WooCommerce', $site_name),
+            'addresses'      => array(
+                array(
+                    'type'        => 1,
+                    'street'      => $street,
+                    'city'        => $billing_city,
+                    'state'       => $billing_state,
+                    'postal_code' => $billing_postcode,
+                    'country'     => WC()->countries->countries[$billing_country] ?? $billing_country,
+                )
+            ),
+            'company' => $billing_company,
+            'phones'  => array()
+        );
+
+        if (!empty($billing_phone)) {
+            $guest_data['phones'][] = array('phone' => $billing_phone);
+        }
+
+        if (!empty($lang)) {
+            $guest_data['custom_field'] = array(
+                'field' => 'ecommerce_language',
+                'value' => $lang,
+            );
+        }
+
+        return $guest_data;
+    }
+
     /* get products -revised*/
     public function get_all_products ($params){
 
