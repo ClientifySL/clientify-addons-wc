@@ -29,7 +29,7 @@ class Clientify_Addons_Activator
      *
      * Long Description.
      *
-     * @since    1.0.0
+     * @since    1.1.0
      */
     public static function activate()
     {

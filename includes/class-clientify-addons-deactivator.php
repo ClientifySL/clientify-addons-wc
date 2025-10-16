@@ -4,7 +4,7 @@
  * Fired during plugin deactivation
  *
  * @link       Emerson Ramirez
- * @since      1.0.0
+ * @since      1.1.0
  *
  * @package    Clientify_Addons
  * @subpackage Clientify_Addons/includes
@@ -15,7 +15,7 @@
  *
  * This class defines all code necessary to run during the plugin's deactivation.
  *
- * @since      1.0.0
+ * @since      1.1.0
  * @package    Clientify_Addons
  * @subpackage Clientify_Addons/includes
  * @author     Emerson Ramirez <ramirezemerson1991@gmail.com>
@@ -27,7 +27,7 @@ class Clientify_Addons_Deactivator {
 	 *
 	 * Long Description.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 */
 	public static function deactivate() {
 
