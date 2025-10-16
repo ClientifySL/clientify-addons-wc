@@ -1,5 +1,5 @@
 === Clientify-Ecommerce ===
-Contributors: CLIENTIFY® Development team
+Contributors: CLIENTIFY® Development team, lead developer Emerson Ramirez
 Tags: woocommerce, clientify, integration, CRM, ecommerce
 Requires at least: 4.0
 Tested up to: 6.2.2

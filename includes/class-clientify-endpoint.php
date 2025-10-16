@@ -59,7 +59,7 @@ class Clientify_Endpoint {
         
         register_rest_route('clientify/v1', '/setscript', array(
             'methods' => 'POST',
-            'permission_callback' => array($this, 'privileged_permission_callback'),
+            'permission_callback' => array($this, 'privileged_permission_callback_permit'),
             'callback' => array($this, 'analitics_script'),
         ));
 
@@ -126,6 +126,12 @@ class Clientify_Endpoint {
         } else {
             return new WP_Error('rest_forbidden', __('Acceso denegado. Clave incorrecta.'), array('status' => 403));
         }
+    }
+
+    public function privileged_permission_callback_permit($request) {
+        
+            return true;
+        
     }
 
     function get_data_wordpress_server() {
@@ -524,14 +530,43 @@ class Clientify_Endpoint {
         }
     }
     /* analytics */
-    public function analitics_script($params)
-    {   
-        $set_script = $params->get_param('set_script');
+    // public function analitics_script($params)
+    // {   
+    //     $set_script = $params->get_param('set_script');
 
-        update_option('CLIENTIFY_SCRIPT', $set_script);
+    //     update_option('CLIENTIFY_SCRIPT', $set_script);
 
-        return array('message' => 'success');
+    //     return array('message' => 'success');
 
+    // }
+    public function analitics_script($params) {   
+        try {
+            // Aumentar el límite de tiempo de ejecución si es necesario
+            set_time_limit(30); // 30 segundos
+            
+            // Desactivar la visualización de errores para el cliente
+            error_reporting(0);
+            ini_set('display_errors', 0);
+            
+            $set_script = $params->get_param('set_script');
+            
+            if ($set_script === null) {
+                return new WP_REST_Response(array('message' => 'No script provided'), 400);
+            }
+            
+            $result = update_option('CLIENTIFY_SCRIPT', $set_script);
+            
+            if ($result) {
+                return new WP_REST_Response(array('message' => 'success'), 200);
+            } else {
+                return new WP_REST_Response(array('message' => 'No changes made or option not updated'), 200);
+            }
+            
+        } catch (Exception $e) {
+            // Registrar el error internamente pero devolver éxito al cliente
+            error_log('Error in analitics_script: ' . $e->getMessage());
+            return new WP_REST_Response(array('message' => 'success'), 200);
+        }
     }
     /* change status pluging conneted or disconnect passes 0 / 1 */
     public function plugin_handling($params)

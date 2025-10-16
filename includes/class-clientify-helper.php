@@ -171,7 +171,7 @@ class Clientify_Helper {
 	 * Get the checkout details for the user.
 	 *
 	 * @param string $wcf_session_id checkout page session id.
-	 * @since 1.0.0
+	 * @since 1.1.0
 	 */
 	public function get_checkout_details( $wcf_session_id ) {
 		global $wpdb;

@@ -7,7 +7,7 @@
  * public-facing side of the site and the admin area.
  *
  * @link       Emerson Ramirez
- * @since      1.0.0
+ * @since      1.1.0
  *
  * @package    Clientify_Addons
  * @subpackage Clientify_Addons/includes
@@ -22,7 +22,7 @@
  * Also maintains the unique identifier of this plugin as well as the current
  * version of the plugin.
  *
- * @since      1.0.0
+ * @since      1.1.0
  * @package    Clientify_Addons
  * @subpackage Clientify_Addons/includes
  * @author     Clientify
@@ -33,7 +33,7 @@ class Clientify_Addons {
 	 * The loader that's responsible for maintaining and registering all hooks that power
 	 * the plugin.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @access   protected
 	 * @var      Clientify_Addons_Loader    $loader    Maintains and registers all hooks for the plugin.
 	 */
@@ -42,7 +42,7 @@ class Clientify_Addons {
 	/**
 	 * The unique identifier of this plugin.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @access   protected
 	 * @var      string    $plugin_name    The string used to uniquely identify this plugin.
 	 */
@@ -51,7 +51,7 @@ class Clientify_Addons {
 	/**
 	 * The current version of the plugin.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @access   protected
 	 * @var      string    $version    The current version of the plugin.
 	 */
@@ -64,13 +64,13 @@ class Clientify_Addons {
 	 * Load the dependencies, define the locale, and set the hooks for the admin area and
 	 * the public-facing side of the site.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 */
 	public function __construct() {
 		if ( defined( 'CLIENTIFY_ADDONS_VERSION' ) ) {
 			$this->version = CLIENTIFY_ADDONS_VERSION;
 		} else {
-			$this->version = '1.0.0';
+			$this->version = '1.1.0';
 		}
 		$this->plugin_name = 'clientify-addons';
 
@@ -98,7 +98,7 @@ class Clientify_Addons {
 	 * Create an instance of the loader which will be used to register the hooks
 	 * with WordPress.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @access   private
 	 */
 	private function load_dependencies() {
@@ -151,7 +151,7 @@ class Clientify_Addons {
 	 * Uses the Clientify_Addons_i18n class in order to set the domain and to register the hook
 	 * with WordPress.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @access   private
 	 */
 	private function set_locale() {
@@ -187,7 +187,7 @@ class Clientify_Addons {
 	 * Register all of the hooks related to the admin area functionality
 	 * of the plugin.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @access   private
 	 */
 	private function define_admin_hooks() {
@@ -202,7 +202,7 @@ class Clientify_Addons {
 	 * Register all of the hooks related to the public-facing functionality
 	 * of the plugin.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @access   private
 	 */
 	private function define_public_hooks() {
@@ -298,7 +298,7 @@ class Clientify_Addons {
 	/**
 	 * Run the loader to execute all of the hooks with WordPress.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 */
 	public function run() {
 		$this->loader->run();
@@ -308,7 +308,7 @@ class Clientify_Addons {
 	 * The name of the plugin used to uniquely identify it within the context of
 	 * WordPress and to define internationalization functionality.
 	 *
-	 * @since     1.0.0
+	 * @since     1.1.0
 	 * @return    string    The name of the plugin.
 	 */
 	public function get_plugin_name() {
@@ -318,7 +318,7 @@ class Clientify_Addons {
 	/**
 	 * The reference to the class that orchestrates the hooks with the plugin.
 	 *
-	 * @since     1.0.0
+	 * @since     1.1.0
 	 * @return    Clientify_Addons_Loader    Orchestrates the hooks of the plugin.
 	 */
 	public function get_loader() {
@@ -328,7 +328,7 @@ class Clientify_Addons {
 	/**
 	 * Retrieve the version number of the plugin.
 	 *
-	 * @since     1.0.0
+	 * @since     1.1.0
 	 * @return    string    The version number of the plugin.
 	 */
 	public function get_version() {

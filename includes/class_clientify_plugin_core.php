@@ -9,7 +9,7 @@ class Clientify_Plugin_Core
 		/**
 	 * clientify_create_menu Add option menu admin page WordPress.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 */
 	function clientify_create_menu() {
 		add_menu_page(
@@ -25,7 +25,7 @@ class Clientify_Plugin_Core
 		/**
 	 * Add config page in admin panel WordPress.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 */
 	public function clientify_index()
 	{
@@ -35,7 +35,7 @@ class Clientify_Plugin_Core
 	/**
 	 * Define a global config parameters for clientify.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 */
 	public function clientify_settings()
 	{
@@ -55,7 +55,7 @@ class Clientify_Plugin_Core
 	/**
 	 * Send parameters to Connect plugin with clientify. Revised.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 *
 	 */
 	function connect_clientify()
@@ -114,7 +114,7 @@ class Clientify_Plugin_Core
 	/**
 	 * Send parameters to gdpr with clientify. Revised.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 */
 	function change_gdpr(){
 		$change_gdpr = $_POST['clientify_gdpr'];
@@ -127,7 +127,7 @@ class Clientify_Plugin_Core
 	/**
 	 * Send parameters to Unlink with clientify. Revised.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 */
 	function disconnect_clientify()
 	{
@@ -163,7 +163,7 @@ class Clientify_Plugin_Core
 	/**
 	 * Query contact by Id in Wocommerce. Revised.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @param    int                  $user_id    The custommer's id number. 
 	 */
 	function get_contact($user_id)
@@ -287,7 +287,7 @@ class Clientify_Plugin_Core
 	/**
 	 * Check Wocommerce is activate.Revised.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @param    int                  $user_id    The custommer's id number.
 	 */
 	function customer_add($user_id)
@@ -299,7 +299,7 @@ class Clientify_Plugin_Core
 	/**
 	 * Send customer information to the clientify api. Revised.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @param    int                  $user_id    The custommer's id number. 
 	 */
 	function sync_hook_customer( $user_id )
@@ -569,7 +569,7 @@ function agregar_opcion_suscripcion($menu_items) {
 	/**
 	 * search and send product data to the clientify api. Revised.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @param    int                  $prodcut_id    The product's id number.
 	 */
 	function product_published($product_id){
@@ -1112,7 +1112,7 @@ function agregar_opcion_suscripcion($menu_items) {
 		/**
 	 * Insert script for analitycs of clientify in the wp_footer hook. Revised.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 */
 	function clientify_api_script(){
 
@@ -1124,7 +1124,7 @@ function agregar_opcion_suscripcion($menu_items) {
 	/**
 	 * Insert product id carts table to track abandoned carts. DEPRECATED
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @param    int                  $prodcut_id    The product id number.
 	 */
 	function clientify_save_add_to_cart($cart_item_key, $product_id)
@@ -1161,7 +1161,7 @@ function agregar_opcion_suscripcion($menu_items) {
 	/**
 	 * Update Carts table according to id_cart. DEPRECATED
 	 * 
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @param 	 int					$cart_update ID cart in table cart
 	 */
 	function clientify_cart_updated($cart_updated)
@@ -1173,7 +1173,7 @@ function agregar_opcion_suscripcion($menu_items) {
 	/**
 	 * Delete cart if purchase is complete.
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @param    int                  $order_id    The order id number.
 
 	 */
@@ -1200,7 +1200,7 @@ function agregar_opcion_suscripcion($menu_items) {
 	/**
 	 * Delete item from temporaly cart. DEPRECATED
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @param    int                  $order_id    The order id number.
 
 	 */
@@ -1234,7 +1234,7 @@ function agregar_opcion_suscripcion($menu_items) {
 	/**
 	 * Collects abandoned carts and sends them to clientify. DEPRECATED
 	 *
-	 * @since    1.0.0
+	 * @since    1.1.0
 	 * @param    string                  $cookie_cart_id    The id number in tab abandoned_cart.
 	 */
 	function sync_hook_abandoned_cart_v2($cookie_cart_id)
@@ -1476,7 +1476,7 @@ function agregar_opcion_suscripcion($menu_items) {
 	/**
 	 * Save cart abandonment tracking and schedule new event. Revised.
 	 *
-	 * @since 1.0.0
+	 * @since 1.1.0
 	 */
 	function clientify_save_cart_abandonment_data() {
 		
@@ -1560,7 +1560,7 @@ function agregar_opcion_suscripcion($menu_items) {
 	 /* Get the checkout details for the user. Revised
 	 *
 	 * @param string $email user email.
-	 * @since 1.0.0
+	 * @since 1.1.0
 	 */
 	public function get_checkout_details_by_email( $email ) {
 		global $wpdb;

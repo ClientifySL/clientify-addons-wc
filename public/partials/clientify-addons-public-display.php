@@ -6,7 +6,7 @@
  * This file is used to markup the public-facing aspects of the plugin.
  *
  * @link       Emerson Ramirez
- * @since      1.0.0
+ * @since      1.1.0
  *
  * @package    Clientify_Addons
  * @subpackage Clientify_Addons/public/partials
