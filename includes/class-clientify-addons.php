@@ -263,7 +263,9 @@ class Clientify_Addons {
 			$this->loader->add_action('woocommerce_add_to_cart', $register_custom_post_type,'clientify_save_add_to_cart', 10, 2);
 			$this->loader->add_action('woocommerce_update_cart_action_cart_updated',$register_custom_post_type, 'clientify_cart_updated', 20, 1);
 			$this->loader->add_action('woocommerce_remove_cart_item', $register_custom_post_type, 'delete_item_cart');
-			$this->loader->add_action( 'woocommerce_thankyou', $register_custom_post_type,'delete_cart' );	
+			$this->loader->add_action('woocommerce_thankyou', $register_custom_post_type,'delete_cart' );
+			$this->loader->add_action('woocommerce_payment_complete', $register_custom_post_type,'delete_cart' );
+			$this->loader->add_action('woocommerce_order_status_completed', $register_custom_post_type,'delete_cart' );
 			/* End Hooks */ 
 			
 		}
