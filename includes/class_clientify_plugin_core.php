@@ -1171,6 +1171,55 @@ function agregar_opcion_suscripcion($menu_items) {
 		}*/
 	}
 	/**
+	 * Save session_id to order when order is being created (BEFORE saved).
+	 * This is critical for payment gateways like Redsys that notify via server-to-server POST,
+	 * where there's no user session available when the payment is completed.
+	 *
+	 * Hook: woocommerce_checkout_create_order (ANTES de guardar la orden)
+	 * Este hook recibe el objeto $order y $data
+	 *
+	 * @since    1.1.0
+	 * @param    WC_Order             $order       The order object (not saved yet).
+	 * @param    array                $data        Checkout form data.
+	 *
+	 */
+	function save_session_id_to_order($order, $data) {
+		// Verificar que WC()->session esté disponible
+		if (WC()->session) {
+			$wcf_session_id = WC()->session->get( 'wcf_session_id' );
+			
+			// Si existe un session_id, guardarlo en los metadatos de la orden
+			if ($wcf_session_id) {
+				// No necesitamos $order->save() aquí porque la orden se guarda automáticamente después
+				$order->update_meta_data( '_wcf_session_id', $wcf_session_id );
+			}
+		}
+	}
+
+	/**
+	 * Save session_id to order for WooCommerce Blocks checkout.
+	 * Similar to save_session_id_to_order but for the Blocks checkout flow.
+	 *
+	 * Hook: woocommerce_store_api_checkout_order_processed
+	 *
+	 * @since    1.1.0
+	 * @param    WC_Order             $order       The order object.
+	 *
+	 */
+	function save_session_id_to_order_blocks($order) {
+		// Verificar que WC()->session esté disponible
+		if (WC()->session) {
+			$wcf_session_id = WC()->session->get( 'wcf_session_id' );
+			
+			// Si existe un session_id, guardarlo en los metadatos de la orden
+			if ($wcf_session_id) {
+				$order->update_meta_data( '_wcf_session_id', $wcf_session_id );
+				$order->save(); // En Blocks sí necesitamos guardar explícitamente
+			}
+		}
+	}
+
+	/**
 	 * Delete cart if purchase is complete.
 	 *
 	 * @since    1.1.0
@@ -1178,18 +1227,25 @@ function agregar_opcion_suscripcion($menu_items) {
 
 	 */
 	function delete_cart($order_id) {
-		// Obtener el ID de sesión de WooCommerce
-		$wcf_session_id = WC()->session->get( 'wcf_session_id' );
-	
-		// Asociar el ID de sesión con la orden
 		$order = wc_get_order( $order_id );
-		$order->update_meta_data( '_wcf_session_id', $wcf_session_id );
-		$order->save();
-	
-		// Obtener el ID de sesión asociado a la orden
+		
+		if (!$order) {
+			return;
+		}
+		
+
 		$wcf_session_id = $order->get_meta('_wcf_session_id');
+		
 	
-		// Si se encuentra el ID de sesión, eliminar la entrada correspondiente en la tabla de carritos abandonados
+		if (empty($wcf_session_id) && WC()->session) {
+			$wcf_session_id = WC()->session->get( 'wcf_session_id' );
+			
+			if ($wcf_session_id) {
+				$order->update_meta_data( '_wcf_session_id', $wcf_session_id );
+				$order->save();
+			}
+		}
+		
 		if ($wcf_session_id) {
 			global $wpdb;
 			$cart_abandonment_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';

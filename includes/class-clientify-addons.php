@@ -259,14 +259,16 @@ class Clientify_Addons {
 			$this->loader->add_action('woocommerce_order_status_changed', $register_custom_post_type,'sync_hook_order', 10, 3);
 			$this->loader->add_action('woocommerce_update_product', $register_custom_post_type,'product_published', 5, 1);
 			$this->loader->add_action('woocommerce_new_product', $register_custom_post_type,'product_published', 5, 1);
-			/* Abandoned Cart Process*/	
+	
 			$this->loader->add_action('woocommerce_add_to_cart', $register_custom_post_type,'clientify_save_add_to_cart', 10, 2);
 			$this->loader->add_action('woocommerce_update_cart_action_cart_updated',$register_custom_post_type, 'clientify_cart_updated', 20, 1);
 			$this->loader->add_action('woocommerce_remove_cart_item', $register_custom_post_type, 'delete_item_cart');
+			$this->loader->add_action('woocommerce_checkout_create_order', $register_custom_post_type, 'save_session_id_to_order', 10, 2);
+			$this->loader->add_action('woocommerce_store_api_checkout_order_processed', $register_custom_post_type, 'save_session_id_to_order_blocks', 10, 1);
 			$this->loader->add_action('woocommerce_thankyou', $register_custom_post_type,'delete_cart' );
 			$this->loader->add_action('woocommerce_payment_complete', $register_custom_post_type,'delete_cart' );
 			$this->loader->add_action('woocommerce_order_status_completed', $register_custom_post_type,'delete_cart' );
-			/* End Hooks */ 
+	
 			
 		}
 		$this->loader->add_action('wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );

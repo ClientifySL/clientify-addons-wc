@@ -117,7 +117,6 @@ class Clientify_Endpoint {
             'callback' => array($this, 'get_clientify_logs'),
         ));
 
-
     }
 
     public function privileged_permission_callback($request) {
