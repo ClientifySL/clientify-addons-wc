@@ -636,57 +636,116 @@ class Clientify_Endpoint {
     /* get Customers  list all*/
     public function sync_all_customer($params){
 
-        $created_at_min = date("Y-m-d", strtotime($params->get_param('created_at_min')));
-        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d') : date("Y-m-d", strtotime($params->get_param('created_at_end')));
-        $per_page = intval($params->get_param('per_page', 25));
-        $paged = intval($params->get_param('page', 1));
         global $wpdb;
-        $contacts_all = array();
 
-        $query = $wpdb->prepare(
-            "SELECT u.ID
-            FROM {$wpdb->users} AS u
-            INNER JOIN {$wpdb->usermeta} AS um ON u.ID = um.user_id
-            WHERE DATE(u.user_registered) BETWEEN %s AND %s
-            AND um.meta_key = '{$wpdb->prefix}capabilities'
-            AND um.meta_value LIKE %s
-            ORDER BY u.user_registered ASC",
+        // Obtener parámetros y saneamiento
+        $created_at_min = date("Y-m-d", strtotime($params->get_param('created_at_min')));
+        $created_at_end = empty($params->get_param('created_at_end')) ? date("Y-m-d") : date("Y-m-d", strtotime($params->get_param('created_at_end')));
+        $per_page = max(1, intval($params->get_param('per_page', 25)));
+        $paged = max(1, intval($params->get_param('page', 1)));
+        $offset = ($paged - 1) * $per_page;
 
+        $contacts_page = array();
+
+        // Preparar claves y prefijos
+        $cap_key = $wpdb->prefix . 'capabilities';
+
+        // 1) Contar usuarios (clientes registrados) en rango
+        $count_query = $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->users} AS u
+             INNER JOIN {$wpdb->usermeta} AS um ON u.ID = um.user_id
+             WHERE DATE(u.user_registered) BETWEEN %s AND %s
+             AND um.meta_key = %s
+             AND um.meta_value LIKE %s",
             $created_at_min,
             $created_at_end,
+            $cap_key,
             '%"customer"%'
         );
-        $users = $wpdb->get_results($query);
+        $total_users = intval($wpdb->get_var($count_query));
 
-        foreach ($users as $customer) {
-            $contacts_all[] = $this->get_contact($customer->ID);
+        // 2) Obtener users paginados: si el offset está dentro del conjunto de usuarios
+        if ($offset < $total_users) {
+            $users_to_fetch = min($per_page, $total_users - $offset);
+            $users_query = $wpdb->prepare(
+                "SELECT u.ID FROM {$wpdb->users} AS u
+                 INNER JOIN {$wpdb->usermeta} AS um ON u.ID = um.user_id
+                 WHERE DATE(u.user_registered) BETWEEN %s AND %s
+                 AND um.meta_key = %s
+                 AND um.meta_value LIKE %s
+                 ORDER BY u.user_registered ASC
+                 LIMIT %d OFFSET %d",
+                $created_at_min,
+                $created_at_end,
+                $cap_key,
+                '%"customer"%',
+                $users_to_fetch,
+                $offset
+            );
+            $users = $wpdb->get_results($users_query);
+
+            foreach ($users as $u) {
+                // Reutilizamos la función existente para construir el contacto
+                $contact = $this->get_contact($u->ID);
+                if ($contact) {
+                    $contacts_page[] = $contact;
+                }
+            }
         }
 
-        $args_orders = array(
-            'limit'        => -1,
-            'date_created' => $created_at_min . '...' . $created_at_end,
-            'orderby'      => 'date',
-            'order'        => 'ASC',
-        );
-        $orders = wc_get_orders($args_orders);
+        // 3) Si la página no está completa, completar con clientes guest (pedidos con _customer_user = 0)
+        $remaining = $per_page - count($contacts_page);
+        if ($remaining > 0) {
+            // Calcular offset para la parte de guest en la paginación global (si la página pedida empieza después de todos los users)
+            $guest_global_offset = max(0, $offset - $total_users);
 
-        foreach ($orders as $order) {
-            if ((int) $order->get_user_id() === 0) {
-                $guest_data = $this->get_guest_contact($order);
-                if (isset($guest_data['email'])) {
-                    $emails_existing = array_column($contacts_all, 'email');
-                    if (!in_array($guest_data['email'], $emails_existing)) {
-                        $contacts_all[] = $guest_data;
+            // Consultar emails únicos de pedidos guest (entre fechas) usando postmeta (más eficiente que wc_get_orders con limit -1)
+            $guest_query = $wpdb->prepare(
+                "SELECT DISTINCT pm_email.meta_value AS email, p.ID as order_id
+                 FROM {$wpdb->posts} p
+                 JOIN {$wpdb->postmeta} pm_user ON pm_user.post_id = p.ID AND pm_user.meta_key = '_customer_user'
+                 JOIN {$wpdb->postmeta} pm_email ON pm_email.post_id = p.ID AND pm_email.meta_key = '_billing_email'
+                 WHERE p.post_type = 'shop_order'
+                   AND DATE(p.post_date) BETWEEN %s AND %s
+                   AND pm_user.meta_value = %s
+                   AND pm_email.meta_value != ''
+                 GROUP BY pm_email.meta_value
+                 ORDER BY p.post_date ASC
+                 LIMIT %d OFFSET %d",
+                $created_at_min,
+                $created_at_end,
+                '0',
+                $remaining,
+                $guest_global_offset
+            );
+
+            $guest_rows = $wpdb->get_results($guest_query);
+
+            // Evitar duplicados frente a usuarios ya añadidos
+            $existing_emails = array();
+            foreach ($contacts_page as $c) {
+                if (!empty($c['email'])) $existing_emails[] = $c['email'];
+            }
+
+            foreach ($guest_rows as $gr) {
+                if (empty($gr->email)) continue;
+                if (in_array($gr->email, $existing_emails, true)) continue;
+
+                // Cargar pedido mínimo por ID y reutilizar get_guest_contact para consistencia
+                $order = wc_get_order($gr->order_id);
+                if ($order) {
+                    $guest_contact = $this->get_guest_contact($order);
+                    if (isset($guest_contact['email']) && !in_array($guest_contact['email'], $existing_emails, true)) {
+                        $contacts_page[] = $guest_contact;
+                        $existing_emails[] = $guest_contact['email'];
+                        if (count($contacts_page) >= $per_page) break;
                     }
                 }
             }
         }
 
-        $total_items = count($contacts_all);
-        $offset = ($paged - 1) * $per_page;
-        $contacts_paginated = array_slice($contacts_all, $offset, $per_page);
-
-        $response = new WP_REST_Response($contacts_paginated, 200);        
+        // Responder solo con la página calculada (ya paginada por BD)
+        $response = new WP_REST_Response($contacts_page, 200);
         return $response;
     }
 
