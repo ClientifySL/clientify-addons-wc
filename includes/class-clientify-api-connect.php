@@ -85,7 +85,7 @@ if (!class_exists('Clientify_Api')) {
                 'sslverify' => $this->ssl_verify
             );
 
-            $response = $this->make_http_request($this->api_url . 'api/ecommerce/v2/connection_by_plugin/', $args);
+            $response = $this->make_http_request($this->api_url . 'ecommerce/v2/connection_by_plugin/', $args);
 
             if (is_array($response) && isset($response['error']) && $response['error']) {
                 return $response;
@@ -128,7 +128,7 @@ if (!class_exists('Clientify_Api')) {
                 'sslverify' => $this->ssl_verify
             );
 
-            $response = $this->make_http_request($this->api_url . 'api/ecommerce/v2/woocommerce_listener', $args);
+            $response = $this->make_http_request($this->api_url . 'ecommerce/v2/woocommerce_listener', $args);
 
             if (is_array($response) && isset($response['error']) && $response['error']) {
                 return $response;
