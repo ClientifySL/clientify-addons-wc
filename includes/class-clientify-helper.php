@@ -246,6 +246,8 @@ class Clientify_Helper {
 		global$wpdb;
 		$table_name = $wpdb->prefix . 'clientify_logs';
 		
+		$resultado = 0;
+
 		if ($params['type_clean'] == 'days'){
 			// Calculate the date 30 days ago
 			$fecha_limite = date('Y-m-d H:i:s', strtotime('-30 days'));

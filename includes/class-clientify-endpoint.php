@@ -7,6 +7,26 @@ require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-clientify-addo
 
 class Clientify_Endpoint {
 
+    /**
+     * Normaliza y formatea un valor numérico asegurando compatibilidad con PHP 8.3.
+     *
+     * @param mixed  $value               Valor a formatear.
+     * @param int    $decimals            Número de decimales.
+     * @param string $decimal_separator   Separador decimal.
+     * @param string $thousands_separator Separador de miles.
+     *
+     * @return string
+     */
+    private function format_amount( $value, $decimals = 2, $decimal_separator = '.', $thousands_separator = '' ) {
+        $normalized = wc_format_decimal( $value, $decimals );
+
+        if ( '' === $normalized || null === $normalized ) {
+            $normalized = 0;
+        }
+
+        return number_format( (float) $normalized, $decimals, $decimal_separator, $thousands_separator );
+    }
+
     public function get_local_api_url(){
 
         $api_url  = get_rest_url();
@@ -316,7 +336,7 @@ class Clientify_Endpoint {
                         'sku'         => $sku,
                         'image_url'   => $image_url,
                         'item_url'    => get_permalink($order_product['product_id']),
-                        'price'       => number_format($price, 2, '.', ''),
+                        'price'       => $this->format_amount($price),
                         'quantity'    => $quantity,
                         'discount'    => $discount != 0 ? round($discount) : 0, //$discount
                         );
@@ -449,7 +469,7 @@ class Clientify_Endpoint {
                     'store_url' => $url_base,
                     'currency' => $currency,
                     'products' => $items,
-                    'price' =>  number_format($total_price, 2, '.', ''),
+                    'price' =>  $this->format_amount($total_price),
                     'shipping' => $shipping,
                     'coupon' => $order_discount_total,
                     );
@@ -705,9 +725,17 @@ class Clientify_Endpoint {
         }
 
         if ( $user_id != 0 ) {
+            $customer_email = '';
+            if ( $customer instanceof WC_Customer ) {
+                $customer_email = $customer->get_email();
+            }
+            if ( empty( $customer_email ) && isset( $customer->email ) ) {
+                $customer_email = $customer->email;
+            }
+
             $data = array(
                 'id_customer'     => $user_id,
-                'email'           => $customer->email,
+                'email'           => $customer_email,
                 'contact_source'  => get_option('blogname'),
                 'user_registered' => $user->user_registered,
                 'custom_fields'   => [],
@@ -1039,7 +1067,7 @@ class Clientify_Endpoint {
                             'sku'         => $sku,
                             'image_url'   => $image_url,
                             'item_url'    => get_permalink($variable_product->id),
-                            'price'       => $price == '' ||   $price == NULL ? 0 : number_format($price, 2, '.', ''),
+                            'price'       => $this->format_amount($price),
                             'currency'    => get_woocommerce_currency()
                             
                         );
@@ -1073,7 +1101,7 @@ class Clientify_Endpoint {
                 'sku'         => $sku,
                 'image_url'   => $image_url,
                 'item_url'    => get_permalink($product->id),
-                'price'       => $price == '' ||   $price == NULL ? 0 : number_format($price, 2, '.', ''),
+                'price'       => $this->format_amount($price),
                 'currency'    => get_woocommerce_currency()
                 
             );
@@ -1220,7 +1248,7 @@ class Clientify_Endpoint {
                             'sku'         => $variable_product->sku,
                             'image_url'   => $image_url,
                             'item_url'    => $product->get_permalink($cart_item),
-                            'price'       => number_format($price, 2, '.', ''),
+                            'price'       => $this->format_amount($price),
                             'quantity'    => (int) $cart_item['quantity'],
                             'discount'    => $discount_val,
                         );
@@ -1252,7 +1280,7 @@ class Clientify_Endpoint {
                             'sku'         => $sku,
                             'image_url'   => get_the_post_thumbnail_url($product_id),
                             'item_url'    => $product->get_permalink($cart_item),
-                            'price'       => number_format($price, 2, '.', ''),
+                            'price'       => $this->format_amount($price),
                             'quantity'    => (int) $cart_item['quantity'],
                             'discount'    => $discount_val,
                         );
@@ -1261,7 +1289,7 @@ class Clientify_Endpoint {
                 }
 
                 if (isset($user_details->wcf_shipping_cost)) {
-                    $shipping = number_format($user_details->wcf_shipping_cost, 2, '.', '');
+                    $shipping = $this->format_amount( $user_details->wcf_shipping_cost );
                 }
 
                 
@@ -1283,9 +1311,11 @@ class Clientify_Endpoint {
                 $site_name = get_option('blogname');
                 $site_name_valid = empty( $site_name ) ? 'WordPress' : $site_name;
 
+                $details_email = isset( $details->email ) ? $details->email : '';
+
                 $data['contact'] = array(
                                     'id_customer'     => '',
-                                    'email'           => $details->email,
+                                    'email'           => $details_email,
                                     'contact_source'  => get_option('blogname'),
                                     'custom_field'   => [],
                                     'tags'            => array(
@@ -1491,7 +1521,7 @@ class Clientify_Endpoint {
                             'sku'         => $variable_product->sku,
                             'image_url'   => $image_url,
                             'item_url'    => $product->get_permalink($cart_item),
-                            'price'       => number_format($price, 2, '.', ''),
+                            'price'       => $this->format_amount($price),
                             'quantity'    => (int) $cart_item['quantity'],
                             'discount'    => $discount_val,
                         );
@@ -1523,7 +1553,7 @@ class Clientify_Endpoint {
                             'sku'         => $sku,
                             'image_url'   => get_the_post_thumbnail_url($product_id),
                             'item_url'    => $product->get_permalink($cart_item),
-                            'price'       => number_format($price, 2, '.', ''),
+                            'price'       => $this->format_amount($price),
                             'quantity'    => (int) $cart_item['quantity'],
                             'discount'    => $discount_val,
                         );
@@ -1532,7 +1562,7 @@ class Clientify_Endpoint {
                 }
                 
                 if (isset($user_details->wcf_shipping_cost)) {
-                    $shipping = number_format($user_details->wcf_shipping_cost, 2, '.', '');
+                    $shipping = $this->format_amount( $user_details->wcf_shipping_cost );
                 }
             
 
@@ -1554,9 +1584,11 @@ class Clientify_Endpoint {
                 $site_name = get_option('blogname');
                 $site_name_valid = empty( $site_name ) ? 'WordPress' : $site_name;
 
+                $details_email = isset( $details->email ) ? $details->email : '';
+
                 $data['contact'] = array(
                                     'id_customer'     => '',
-                                    'email'           => $details->email,
+                                    'email'           => $details_email,
                                     'contact_source'  => get_option('blogname'),
                                     'custom_field'   => [],
                                     'tags'            => array(
@@ -1767,7 +1799,7 @@ class Clientify_Endpoint {
                         'sku'         => $sku,
                         'image_url'   => $image_url,
                         'item_url'    => get_permalink($order_product['product_id']),
-                        'price'       => number_format($price, 2, '.', ''),
+                        'price'       => $this->format_amount($price),
                         'quantity'    => $order_product->get_quantity(),
                         'discount'    => $discount != 0 ? round($discount) : 0, //$discount
                         );

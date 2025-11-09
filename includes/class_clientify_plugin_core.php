@@ -6,6 +6,26 @@ require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-clientify-help
 
 class Clientify_Plugin_Core
 {
+	/**
+	 * Formatea un valor numérico garantizando compatibilidad con PHP 8.3.
+	 *
+	 * @param mixed  $value               Valor a formatear.
+	 * @param int    $decimals            Número de decimales.
+	 * @param string $decimal_separator   Separador decimal.
+	 * @param string $thousands_separator Separador de miles.
+	 *
+	 * @return string
+	 */
+	private function format_amount( $value, $decimals = 2, $decimal_separator = '.', $thousands_separator = '' ) {
+		$normalized = wc_format_decimal( $value, $decimals );
+
+		if ( '' === $normalized || null === $normalized ) {
+			$normalized = 0;
+		}
+
+		return number_format( (float) $normalized, $decimals, $decimal_separator, $thousands_separator );
+	}
+
 		/**
 	 * clientify_create_menu Add option menu admin page WordPress.
 	 *
@@ -60,11 +80,12 @@ class Clientify_Plugin_Core
 	 */
 	function connect_clientify()
 	{
-		$key = $_POST['apikey'] !=	'' ? sanitize_text_field($_POST['apikey']) : get_option('CLIENTIFY_API_KEY');
-		if ( $_POST['apikey'] != '' || get_option('CLIENTIFY_API_KEY') != '' ) {
-			$order_process = isset( $_POST['order_process'] ) ?  $_POST['order_process']  : '';
+		$api_key_input = isset( $_POST['apikey'] ) ? sanitize_text_field( wp_unslash( $_POST['apikey'] ) ) : '';
+		$key = $api_key_input !== '' ? $api_key_input : get_option('CLIENTIFY_API_KEY');
+		if ( $api_key_input !== '' || get_option('CLIENTIFY_API_KEY') != '' ) {
+			$order_process = isset( $_POST['order_process'] ) ?  sanitize_text_field( wp_unslash( $_POST['order_process'] ) )  : '';
 			$gdpr_status = isset($_POST['gdpr_status']) ? intval($_POST['gdpr_status']) : 0;
-			$gdpr_text = sanitize_text_field($_POST['gdpr_text']);
+			$gdpr_text = isset( $_POST['gdpr_text'] ) ? sanitize_text_field( wp_unslash( $_POST['gdpr_text'] ) ) : '';
 			if (empty($gdpr_text)) {
 				$gdpr_text = 'Acepto recibir comunicaciones comerciales GDPR';
 			}
@@ -117,8 +138,8 @@ class Clientify_Plugin_Core
 	 * @since    1.1.0
 	 */
 	function change_gdpr(){
-		$change_gdpr = $_POST['clientify_gdpr'];
-		update_option('CLIENTIFY_GDPR', $change_gdpr);
+		$change_gdpr = isset( $_POST['clientify_gdpr'] ) ? sanitize_text_field( wp_unslash( $_POST['clientify_gdpr'] ) ) : '';
+		update_option('CLIENTIFY_GDPR', $change_gdpr );
 		$response = get_option('CLIENTIFY_GDPR');
 		echo wp_json_encode( $response );
 		die();
@@ -131,8 +152,9 @@ class Clientify_Plugin_Core
 	 */
 	function disconnect_clientify()
 	{
-		$key = $_POST['apikey'] !=	'' ? $_POST['apikey'] : get_option('CLIENTIFY_API_KEY');
-		if ( $_POST['apikey'] != '' || get_option('CLIENTIFY_API_KEY') != '' ) {
+		$api_key_input = isset( $_POST['apikey'] ) ? sanitize_text_field( wp_unslash( $_POST['apikey'] ) ) : '';
+		$key = $api_key_input !== '' ? $api_key_input : get_option('CLIENTIFY_API_KEY');
+		if ( $api_key_input !== '' || get_option('CLIENTIFY_API_KEY') != '' ) {
 			/* generate uid key for connect to clientify */
 			$endpoint_class = new Clientify_Endpoint();
 			$api = new Clientify_Api;
@@ -574,14 +596,30 @@ function agregar_opcion_suscripcion($menu_items) {
 	 */
 	function product_published($product_id){
 
-		$endpoint_class = new Clientify_Endpoint();
+		// Evitar ejecuciones innecesarias en autosaves, revisiones o productos no publicados
+		if ( wp_is_post_autosave( $product_id ) || wp_is_post_revision( $product_id ) ) {
+			return;
+		}
+
 		$product = wc_get_product( $product_id );
+		if ( ! $product instanceof WC_Product ) {
+			return;
+		}
+
+		if ( 'publish' !== $product->get_status() ) {
+			return;
+		}
+
+		$endpoint_class = new Clientify_Endpoint();
 		$url_base = $endpoint_class->get_local_api_url();
 		$categories = array();
         $subcategories= array();
 		$join_categories = "";
         $join_subcategories = "";
 		$terms = get_the_terms($product_id, 'product_cat');
+		if ( is_wp_error( $terms ) || empty( $terms ) ) {
+			$terms = array();
+		}
 		
 		foreach ($terms as $term) {
 			if ($term->parent == 0) {
@@ -704,7 +742,7 @@ function agregar_opcion_suscripcion($menu_items) {
                             'sku'         => $sku,
                             'product_picture_url'   => $image_url,
                             'item_url'    => get_permalink($variable_product->id),
-                            'price'       => $price == '' ||   $price == NULL ? 0 : number_format($price, 2, '.', ''),
+                            'price'       => $this->format_amount($price),
                             'currency'    => get_woocommerce_currency(),
 							'store_url'   => $url_base
                             
@@ -744,7 +782,7 @@ function agregar_opcion_suscripcion($menu_items) {
 			'id'                  => $product_id,
 			'name'                => $product->get_name(),
 			'description'         => $product_full_description,
-			'price' 			  => $price == 0 ? 0 : number_format((float)$price, 2, '.', ''),
+			'price' 			  => $this->format_amount($price),
 			'item_url'            => get_permalink($product_id),
 			'currency'            => get_option('woocommerce_currency'),
 			'category'            => $join_cat,
@@ -926,9 +964,9 @@ function agregar_opcion_suscripcion($menu_items) {
 							'sku' => $variable_product->sku,
 							'image_url' => $image_url,
 							'item_url' => get_permalink($variable_product->id),
-							'price' => $price == '' || $price == NULL ? 0 : number_format($price, 2, '.', ''),
+							'price' => $this->format_amount($price),
 							'quantity' => $quantity,
-							'discount' => $discount != 0 ? number_format(round($discount), 1, '.', ',') : 0, //$discount
+							'discount' => $discount != 0 ? $this->format_amount(round($discount), 1, '.', ',') : 0,
 
 						);
 
@@ -941,9 +979,9 @@ function agregar_opcion_suscripcion($menu_items) {
 							'sku' => $sku,
 							'image_url' => $image_url,
 							'item_url' => get_permalink($order_product['product_id']),
-							'price' => number_format($price, 2, '.', ''),
+							'price' => $this->format_amount($price),
 							'quantity' => $quantity,
-							'discount' => $discount != 0 ? number_format(round($discount), 1, '.', ',') : 0, //$discount
+							'discount' => $discount != 0 ? $this->format_amount(round($discount), 1, '.', ',') : 0,
 						);
 
 					}
@@ -1076,7 +1114,7 @@ function agregar_opcion_suscripcion($menu_items) {
 					'currency'   => $currency,
 					'products'   => $items,
 					'shipping' 	 => $shipping,
-					'price'	     =>  number_format($total_price, 2, '.', ''),
+					'price'	     =>  $this->format_amount($total_price),
 					'coupon'     => 0,
 				);
 
@@ -1333,7 +1371,7 @@ function agregar_opcion_suscripcion($menu_items) {
 							'sku'         => $product->get_sku(),
 							'image_url'   => get_the_post_thumbnail_url($product_id),
 							'item_url'    => $product->get_permalink($cart_item),
-							'price'       => number_format($price, 2, '.', ','),
+							'price'       => $this->format_amount($price, 2, '.', ','),
 							'quantity'    => (int) $cart_item['quantity'],
 							'discount'    => $discount,
 						);
@@ -1350,7 +1388,7 @@ function agregar_opcion_suscripcion($menu_items) {
 					'currency'       => get_option('woocommerce_currency'),
 					'store_url'      => $url_base,
 					'products'       => $items,
-					'price'	         => number_format($details->cart_total, 2, '.', ','),
+					'price'	         => $this->format_amount($details->cart_total, 2, '.', ','),
 					'shipping'	     => $shipping,
 					'coupon'         =>  0
 					
@@ -1360,9 +1398,11 @@ function agregar_opcion_suscripcion($menu_items) {
 				$site_name = get_option('blogname');
 				$site_name_valid = empty( $site_name ) ? 'WordPress' : $site_name;
 				
+				$details_email = isset( $details->email ) ? $details->email : '';
+
 				$data['contact'] = array(
 							'id_customer'     => '',
-							'email'       	  => $details->email,
+							'email'       	  => $details_email,
 							'contact_source'  => get_option('blogname'),
 							'custom_field'   => [],
 							'tags'            => array(
@@ -1434,7 +1474,7 @@ function agregar_opcion_suscripcion($menu_items) {
 
 				$insert_clientify = array(
 					'cartflows_id' 	  => $id_cartslow->id,
-					'cartflows_email' => $details->email,
+					'cartflows_email' => $details_email,
 					'date_add' 		  => $details->time
 				); 
 
