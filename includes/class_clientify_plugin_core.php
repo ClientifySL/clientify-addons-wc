@@ -83,7 +83,7 @@ class Clientify_Plugin_Core
 		$api_key_input = isset( $_POST['apikey'] ) ? sanitize_text_field( wp_unslash( $_POST['apikey'] ) ) : '';
 		$key = $api_key_input !== '' ? $api_key_input : get_option('CLIENTIFY_API_KEY');
 		if ( $api_key_input !== '' || get_option('CLIENTIFY_API_KEY') != '' ) {
-			$order_process = isset( $_POST['order_process'] ) ?  sanitize_text_field( wp_unslash( $_POST['order_process'] ) )  : '';
+			$order_process = isset($_POST['order_process']) && is_array($_POST['order_process']) ? array_map('sanitize_text_field', wp_unslash($_POST['order_process'])) : [];
 			$gdpr_status = isset($_POST['gdpr_status']) ? intval($_POST['gdpr_status']) : 0;
 			$gdpr_text = isset( $_POST['gdpr_text'] ) ? sanitize_text_field( wp_unslash( $_POST['gdpr_text'] ) ) : '';
 			if (empty($gdpr_text)) {
