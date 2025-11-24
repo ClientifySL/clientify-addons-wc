@@ -217,6 +217,10 @@ class Clientify_Endpoint {
 
         foreach( $orders as $order ) {  
 
+            if ( $order->get_type() === 'shop_order_refund' ) {
+                continue;
+            }
+
             $key = 'wc-' . $order->get_status();
             if ( in_array($key, $order_status_settings) ) {// check is order status is right
 
