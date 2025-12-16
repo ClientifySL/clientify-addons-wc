@@ -1,21 +1,22 @@
 <?php
-if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
+if (!defined('ABSPATH'))
+    exit; // Exit if accessed directly
 if (!class_exists('Clientify_Api')) {
     require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class_clientify_plugin_core.php';
 
     class Clientify_Api
     {
         var $api_key;
-        
+
         // Configuración de timeouts y reintentos
         var $max_retries = 3; // Número máximo de reintentos
         var $retry_delay = 2; // Segundos de espera entre reintentos
         var $timeout = 30; // Timeout en segundos para las llamadas HTTP
-        
+
         // Configuración de la API
-        var $api_url = 'https://plus.clientify.com/';
+        var $api_url = 'https://api-plus.clientify.com/';
         // var $api_url = 'https://ecommerce-aly.ngrok.io/';
-        
+
         // Configuración de SSL y HTTP
         var $ssl_verify = false; // Verificación SSL (false para desarrollo, true para producción)
         var $http_version = '1.1'; // Versión de HTTP a usar
@@ -32,43 +33,43 @@ if (!class_exists('Clientify_Api')) {
         {
             // Log de la llamada
             error_log("Clientify API: Intentando llamada $method a $url (intento " . ($retry_count + 1) . ")");
-            
+
             if ($method === 'GET') {
                 $response = wp_remote_get($url, $args);
             } else {
                 $response = wp_remote_post($url, $args);
             }
-            
+
             if (is_wp_error($response)) {
                 $error_code = $response->get_error_code();
                 $error_message = $response->get_error_message();
-                
+
                 error_log("Clientify API Error: $error_code - $error_message (intento " . ($retry_count + 1) . ")");
-                
+
                 // Si es un timeout y no hemos excedido el número de reintentos
                 if (($error_code === 'http_request_failed' || $error_code === 'timeout') && $retry_count < $this->max_retries) {
                     error_log("Clientify API: Reintentando en " . $this->retry_delay . " segundos...");
-                    
+
                     // Esperar antes del reintento
                     sleep($this->retry_delay);
-                    
+
                     // Reintentar la llamada
                     return $this->make_http_request($url, $args, $method, $retry_count + 1);
                 }
-                
+
                 return [
-                    'error'   => true,
-                    'code'    => $error_code,
+                    'error' => true,
+                    'code' => $error_code,
                     'message' => $error_message,
-                    'data'    => $response->get_error_data(),
+                    'data' => $response->get_error_data(),
                     'retries' => $retry_count
                 ];
             }
-            
+
             // Log de respuesta exitosa
             $response_code = wp_remote_retrieve_response_code($response);
             error_log("Clientify API: Respuesta exitosa con código $response_code");
-            
+
             return $response;
         }
 
