@@ -573,6 +573,7 @@ function agregar_opcion_suscripcion($menu_items) {
 	 * @param    int                  $prodcut_id    The product's id number.
 	 */
 	function product_published($product_id){
+		$clientify_product = null;
 
 		$endpoint_class = new Clientify_Endpoint();
 		$product = wc_get_product( $product_id );

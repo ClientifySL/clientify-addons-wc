@@ -1198,9 +1198,9 @@ class Clientify_Endpoint {
 
                 foreach ($cart_content as $cart_item) {
                 
-                    $discount = $discount + ( $cart_item['line_subtotal'] - $cart_item['line_total'] );
-                    $total = $total + $cart_item['line_subtotal'];
-                    $tax = $tax + $cart_item['line_tax'];
+                    $discount = $discount + ( floatval($cart_item['line_subtotal']) - floatval($cart_item['line_total']) );
+                    $total = $total + floatval($cart_item['line_subtotal']);
+                    $tax = $tax + floatval($cart_item['line_tax']);
                     $shipping = 0 ;
                     $product_id = $cart_item['product_id'];
                     $categories = array();
@@ -1471,9 +1471,9 @@ class Clientify_Endpoint {
 
                 foreach ($cart_content as $cart_item) {
                 
-                    $discount = $discount + ( $cart_item['line_subtotal'] - $cart_item['line_total'] );
-                    $total = $total + $cart_item['line_subtotal'];
-                    $tax = $tax + $cart_item['line_tax'];
+                    $discount = $discount + ( floatval($cart_item['line_subtotal']) - floatval($cart_item['line_total']) );
+                    $total = $total + floatval($cart_item['line_subtotal']);
+                    $tax = $tax + floatval($cart_item['line_tax']);
                     $shipping = 0 ;
                     $product_id = $cart_item['product_id'];
                     $categories = array();
