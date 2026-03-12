@@ -70,7 +70,7 @@ class Clientify_Addons {
 		if ( defined( 'CLIENTIFY_ADDONS_VERSION' ) ) {
 			$this->version = CLIENTIFY_ADDONS_VERSION;
 		} else {
-			$this->version = '1.1.0';
+			$this->version = '1.1.1';
 		}
 		$this->plugin_name = 'clientify-addons';
 
