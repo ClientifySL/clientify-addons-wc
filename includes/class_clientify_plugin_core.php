@@ -1057,6 +1057,11 @@ function agregar_opcion_suscripcion($menu_items) {
 					}
 				}
 
+				// Email siempre desde facturación de la orden al enviar a Clientify
+				if ( is_array($contact) && !empty($order->get_billing_email()) ) {
+					$contact['email'] = $order->get_billing_email();
+				}
+
 				$shipping = $order_data['shipping_total'];
 
 				if ($shipping === 0 || $shipping === "0" || $shipping === '' || $shipping === null || $shipping === false ) {

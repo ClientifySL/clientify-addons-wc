@@ -434,6 +434,11 @@ class Clientify_Endpoint {
                     }
                 }
 
+                // Email siempre desde facturación de la orden
+                if ( is_array($contact) && !empty($order->get_billing_email()) ) {
+                    $contact['email'] = $order->get_billing_email();
+                }
+
                 $shipping = $order_data['shipping_total'];
 
 				if ($shipping === 0 || $shipping === "0" || $shipping === '' || $shipping === null || $shipping === false ) {
@@ -1956,6 +1961,11 @@ class Clientify_Endpoint {
                             );
                         }
                     }
+                }
+
+                // Email siempre desde facturación de la orden
+                if ( is_array($contact) && !empty($order->get_billing_email()) ) {
+                    $contact['email'] = $order->get_billing_email();
                 }
 
                 $shipping = $order_data['shipping_total'];
