@@ -1,9 +1,10 @@
 ( function ( $ ) {
-	
+
 	console.log('init //')
 	let timer;
+	let iti = null;
 	const wcf_cart_abandonment = {
-		
+
 		init() {
 			if (
 				clientify_wcf_ca_vars._show_gdpr_message &&
@@ -81,6 +82,15 @@
 			return valid;
 		},
 
+		_getPhoneWithPrefix() {
+			const rawPhone = jQuery( '#billing_phone' ).val() || '';
+			const dialCode = jQuery( '#billing_phone' ).closest( '.iti' ).find( '.iti__selected-dial-code' ).text().trim();
+			if ( dialCode && rawPhone ) {
+				return dialCode + rawPhone;
+			}
+			return rawPhone;
+		},
+
 		_getCheckoutData() {
 			const wcf_email = jQuery('#billing_email').val() || jQuery('#email').val();
 
@@ -88,7 +98,7 @@
 				return;
 			}
 
-			let wcf_phone = jQuery( '#billing_phone' ).val();
+			let wcf_phone = wcf_cart_abandonment._getPhoneWithPrefix();
 			const atposition = wcf_email.indexOf( '@' );
 			const dotposition = wcf_email.lastIndexOf( '.' );
 
@@ -111,7 +121,7 @@
 				//If Email or Phone valid
 				const wcf_name = jQuery( '#billing_first_name' ).val();
 				const wcf_surname = jQuery( '#billing_last_name' ).val();
-				wcf_phone = jQuery( '#billing_phone' ).val();
+				wcf_phone = wcf_cart_abandonment._getPhoneWithPrefix();
 				const wcf_country = jQuery( '#billing_country' ).val();
 				const wcf_city = jQuery( '#billing_city' ).val();
 
