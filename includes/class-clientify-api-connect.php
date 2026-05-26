@@ -14,11 +14,11 @@ if (!class_exists('Clientify_Api')) {
         var $timeout = 30; // Timeout en segundos para las llamadas HTTP
 
         // Configuración de la API
-        var $api_url = 'https://api-plus.clientify.com/';
-        // var $api_url = 'https://ecommerce-aly.ngrok.io/';
+        // var $api_url = 'https://api-plus.clientify.com/';
+        var $api_url = 'https://ecommerce-aly.ngrok.io/';
 
         // Configuración de SSL y HTTP
-        var $ssl_verify = false; // Verificación SSL (false para desarrollo, true para producción)
+        var $ssl_verify = true;
         var $http_version = '1.1'; // Versión de HTTP a usar
 
         public function __construct()
@@ -32,7 +32,9 @@ if (!class_exists('Clientify_Api')) {
         private function make_http_request($url, $args, $method = 'POST', $retry_count = 0)
         {
             // Log de la llamada
-            error_log("Clientify API: Intentando llamada $method a $url (intento " . ($retry_count + 1) . ")");
+            if ( $retry_count > 0 ) {
+                error_log("Clientify API: Reintento $retry_count para $method $url");
+            }
 
             if ($method === 'GET') {
                 $response = wp_remote_get($url, $args);
@@ -50,10 +52,7 @@ if (!class_exists('Clientify_Api')) {
                 if (($error_code === 'http_request_failed' || $error_code === 'timeout') && $retry_count < $this->max_retries) {
                     error_log("Clientify API: Reintentando en " . $this->retry_delay . " segundos...");
 
-                    // Esperar antes del reintento
-                    sleep($this->retry_delay);
-
-                    // Reintentar la llamada
+                        // Reintentar la llamada
                     return $this->make_http_request($url, $args, $method, $retry_count + 1);
                 }
 
@@ -66,9 +65,10 @@ if (!class_exists('Clientify_Api')) {
                 ];
             }
 
-            // Log de respuesta exitosa
             $response_code = wp_remote_retrieve_response_code($response);
-            error_log("Clientify API: Respuesta exitosa con código $response_code");
+            if ( $response_code >= 400 ) {
+                error_log("Clientify API: Error HTTP $response_code en $method $url");
+            }
 
             return $response;
         }

@@ -291,10 +291,12 @@ class Clientify_Addons {
 		
 		$this->loader->add_action('wp_ajax_change_gdpr', $register_custom_post_type, 'change_gdpr');
 		$this->loader->add_action('wp_ajax_nopriv_change_gdpr', $register_custom_post_type, 'change_gdpr');
-		// Store user details from the current checkout page.
-			$this->loader->add_action( 'wp_ajax_clientify_save_cart_abandonment_data', $register_custom_post_type, 'clientify_save_cart_abandonment_data'  );
-			$this->loader->add_action( 'wp_ajax_nopriv_clientify_save_cart_abandonment_data', $register_custom_post_type, 'clientify_save_cart_abandonment_data'  );
-		
+
+		// Store user details from the current checkout page — solo si el plugin está conectado.
+		if ( get_option('CLIENTIFY_STATUS') != 0 ) {
+			$this->loader->add_action( 'wp_ajax_clientify_save_cart_abandonment_data', $register_custom_post_type, 'clientify_save_cart_abandonment_data' );
+			$this->loader->add_action( 'wp_ajax_nopriv_clientify_save_cart_abandonment_data', $register_custom_post_type, 'clientify_save_cart_abandonment_data' );
+		}
 	}
 
 	/**

@@ -1170,21 +1170,33 @@ class Clientify_Endpoint {
 
         $per_page = empty($params->get_param('per_page')) ? 0 : $params->get_param('per_page');
         $paged = empty($params->get_param('page')) ? 1 : $params->get_param('page');
-		$page =(int)(!isset($paged)) ? 1 : $paged;
-		$per_page = (int)$params["per_page"];
-		$date_null = $created_from != 0 ? "between  '".date("Y-m-d", strtotime($created_from))."'  and '".date("Y-m-d", strtotime($created_at_end))."'" : '';
-		$limit = $per_page != 0 ? 'LIMIT '.(($page-1)*$per_page).' , '.$per_page.'' : '' ;
+		$page  = (int) $paged;
+		$per_page = (int) $per_page;
+		$offset = ($page - 1) * $per_page;
+		$cart_abandonment_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';
 
-        //$abandoned_carts = $wpdb->get_results("SELECT checkout_id, session_id, id FROM ". $wpdb->prefix . "clientify_ca_cart_abandonment WHERE DATE(time)  ".$date_null." group by checkout_id ".$limit); 
-        $abandoned_carts = $wpdb->get_results("SELECT checkout_id, session_id, id FROM ". $wpdb->prefix . "clientify_ca_cart_abandonment WHERE DATE(time) ".$date_null." ".$limit);   
+		if ( $created_from != 0 ) {
+			$abandoned_carts = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT checkout_id, session_id, id FROM {$cart_abandonment_table} WHERE DATE(time) BETWEEN %s AND %s" . ( $per_page > 0 ? " LIMIT %d OFFSET %d" : "" ),
+					date("Y-m-d", strtotime($created_from)),
+					date("Y-m-d", strtotime($created_at_end)),
+					...( $per_page > 0 ? [ $per_page, $offset ] : [] )
+				)
+			);
+		} else {
+			$abandoned_carts = $wpdb->get_results(
+				$per_page > 0
+					? $wpdb->prepare( "SELECT checkout_id, session_id, id FROM {$cart_abandonment_table} LIMIT %d OFFSET %d", $per_page, $offset )
+					: "SELECT checkout_id, session_id, id FROM {$cart_abandonment_table}"
+			);
+		}
 
         $endpoint_class = new Clientify_Endpoint();
         $url_base = $endpoint_class->get_local_api_url();
 
-        $helper = new Clientify_Helper(); 
+        $helper = new Clientify_Helper();
 
-        
-        
         foreach ( $abandoned_carts as $abandoned_cart ) {
             if ($abandoned_cart->session_id)  {
                 $details          = $helper->get_checkout_details( $abandoned_cart->session_id );   
@@ -1414,6 +1426,7 @@ class Clientify_Endpoint {
                 }
 
                 if ( !empty($user_details->wcf_phone_number) ) {
+                    if ( !isset($customer_phones) ) $customer_phones = array();
                     $data['contact']['phones'][] = array('phone' => $user_details->wcf_phone_number);
                     $customer_phones[] = $user_details->wcf_phone_number;
                 }
@@ -1445,18 +1458,32 @@ class Clientify_Endpoint {
 
         $per_page = empty($params->get_param('per_page')) ? 0 : $params->get_param('per_page');
         $paged = empty($params->get_param('page')) ? 1 : $params->get_param('page');
-        $page =(int)(!isset($paged)) ? 1 : $paged;
-        $per_page = (int)$params["per_page"];
-        $date_null = $created_from != 0 ? "between  '".date("Y-m-d", strtotime($created_from))."'  and '".date("Y-m-d", strtotime($created_end))."'" : '';
-        $limit = $per_page != 0 ? 'LIMIT '.(($page-1)*$per_page).' , '.$per_page.'' : '' ;
+        $page     = (int) $paged;
+        $per_page = (int) $per_page;
+        $offset   = ($page - 1) * $per_page;
+        $cart_abandonment_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';
 
-        //$abandoned_carts = $wpdb->get_results("SELECT checkout_id, session_id, id FROM ". $wpdb->prefix . "clientify_ca_cart_abandonment WHERE DATE(time)  ".$date_null." group by checkout_id ".$limit); 
-        $abandoned_carts = $wpdb->get_results("SELECT checkout_id, session_id, id FROM ". $wpdb->prefix . "clientify_ca_cart_abandonment WHERE DATE(time) ".$date_null." ".$limit);   
+        if ( $created_from != 0 ) {
+            $abandoned_carts = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT checkout_id, session_id, id FROM {$cart_abandonment_table} WHERE DATE(time) BETWEEN %s AND %s" . ( $per_page > 0 ? " LIMIT %d OFFSET %d" : "" ),
+                    date("Y-m-d", strtotime($created_from)),
+                    date("Y-m-d", strtotime($created_end)),
+                    ...( $per_page > 0 ? [ $per_page, $offset ] : [] )
+                )
+            );
+        } else {
+            $abandoned_carts = $wpdb->get_results(
+                $per_page > 0
+                    ? $wpdb->prepare( "SELECT checkout_id, session_id, id FROM {$cart_abandonment_table} LIMIT %d OFFSET %d", $per_page, $offset )
+                    : "SELECT checkout_id, session_id, id FROM {$cart_abandonment_table}"
+            );
+        }
 
         $endpoint_class = new Clientify_Endpoint();
         $url_base = $endpoint_class->get_local_api_url();
 
-        $helper = new Clientify_Helper(); 
+        $helper = new Clientify_Helper();
 
         foreach ( $abandoned_carts as $abandoned_cart ) {
             if ($abandoned_cart->session_id)  {
@@ -1685,6 +1712,7 @@ class Clientify_Endpoint {
                 }
 
                 if ( !empty($user_details->wcf_phone_number) ) {
+                    if ( !isset($customer_phones) ) $customer_phones = array();
                     $data['contact']['phones'][] = array('phone' => $user_details->wcf_phone_number);
                     $customer_phones[] = $user_details->wcf_phone_number;
                 }
@@ -1771,7 +1799,13 @@ class Clientify_Endpoint {
                     $join_categories = "";
                     $join_subcategories = "";
 
-                    $terms = get_the_terms($product->id, 'product_cat');
+                    $product = $order_product->get_product();
+
+                    if (!$product) {
+                        continue;
+                    }
+
+                    $terms = get_the_terms($order_product['product_id'], 'product_cat');
 
                     if (!empty($terms)) {
                         foreach ($terms as $term) {
@@ -1802,8 +1836,6 @@ class Clientify_Endpoint {
                     }
 
                     $join_cat = $join_categories."/".$join_subcategories;
-
-                    $product = $order_product->get_product();
                         
                     try {
                         $sku = $product->get_sku();
@@ -2011,8 +2043,7 @@ class Clientify_Endpoint {
                         );
                     }
 
-                 //Send data to Clientify and veridy contact is true
-                if($contact){
+                if ( $contact && !empty($items) ) {
                     $order = $api->post_order_clientify( $data );
                     $result_sync [] = $order;
                 }

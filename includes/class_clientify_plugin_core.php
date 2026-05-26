@@ -148,8 +148,11 @@ class Clientify_Plugin_Core
 			);
 			$response = $api->post_base_clientify($post_key, $key);
 		}
-		foreach ( $response as $obj ) {
-			$status = $obj->status;	
+		$status = null;
+		if ( !is_null($response) && !isset($response['error']) ) {
+			foreach ( $response as $obj ) {
+				$status = $obj->status;
+			}
 		}
 		//success/ fail / error
 		if ( $status == 'success' || $status == 'failed' || $status == null ||  $status == 'error') {

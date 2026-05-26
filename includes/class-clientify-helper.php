@@ -261,11 +261,7 @@ class Clientify_Helper {
 		}
 		elseif($params['type_clean'] == 'all'){
 			// Delete all old records
-			$resultado = $wpdb->query(
-				$wpdb->prepare(
-					"DELETE FROM $table_name"
-				)
-			);
+			$resultado = $wpdb->query( "DELETE FROM $table_name" );
 		}
 
 		// Verificar si la operación fue exitosa
