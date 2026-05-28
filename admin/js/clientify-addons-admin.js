@@ -81,22 +81,38 @@ jQuery(document).ready(function () {
 		});
 	}
 	floatLabel(".floatLabel");
-	// just add a class of "floatLabel to the input field!"
-	/* displays the message in the menssage div */
-	function statusMessage(message, status) {
-    	if (status == 'success') {
-      		classMessage.removeClass('bridge_error');
-    	} else {
-      		classMessage.addClass('bridge_error');
-    	}
-    	classMessage.html('<span>' + message + '</span>');
-    	classMessage.fadeIn("slow");
-    	classMessage.fadeOut(7000);
-    	var messageClear = setTimeout(function(){
-      	classMessage.html('');
-    	}, 3000);
-    	clearTimeout(messageClear);
-  	};
+
+	// Notice grande arriba de las tabs — persiste 30s o hasta que el usuario la cierra
+	function showAdminNotice(message, type) {
+		var cssClass = (type === 'success') ? 'notice-success' : 'notice-error';
+		$('.clientify-notice').remove();
+		var $notice = $('<div class="notice ' + cssClass + ' is-dismissible clientify-notice"><p><strong>' + message + '</strong></p></div>');
+		$('.nav-tab-wrapper').before($notice);
+		// Hacer el dismiss nativo de WP funcional
+		$notice.find('button.notice-dismiss').on('click', function() { $notice.remove(); });
+		setTimeout(function () { $notice.fadeOut(600, function () { $(this).remove(); }); }, 30000);
+	}
+
+	// Mensaje pequeño junto al botón — desaparece en 4s
+	function statusMessage(message, type) {
+		var $msg = classMessage;
+		$msg.removeClass('bridge_error bridge_success');
+		$msg.addClass(type === 'success' ? 'bridge_success' : 'bridge_error');
+		$msg.html('<span>' + message + '</span>').stop(true).fadeIn('fast');
+		setTimeout(function () { $msg.fadeOut(500, function () { $msg.html(''); }); }, 4000);
+	}
+
+	// Mostrar notice persistida en sessionStorage tras recarga de página
+	(function () {
+		var pending = sessionStorage.getItem('clientify_notice');
+		if (pending) {
+			try {
+				var n = JSON.parse(pending);
+				showAdminNotice(n.message, n.type);
+			} catch (e) {}
+			sessionStorage.removeItem('clientify_notice');
+		}
+	})();
 
 	connect.click(function() {
 		var btnconnect = jQuery(this),
@@ -108,73 +124,46 @@ jQuery(document).ready(function () {
 						 gdpr_text = $('#clientify_gdpr_text').val().trim() || 'Acepto recibir comunicaciones comerciales GDPR',
 						 res = 0;
 		btnconnect.attr("disabled", true).text(btnconnect.data("loading-text"));
-		if( $("#key").val() == "" ) {
-        	statusMessage('Error de Conexión Clientify API Key Vacía','error');
-        	$("#key").focus();       // Esta función coloca el foco de escritura del usuario en el campo Nombre directamente.
-			btnconnect.removeAttr("disabled").text("Conectar").addClass( 'connect-class' );
-        return false;
-    	} else {
+		if ( $("#key").val() === "" ) {
+			statusMessage('API Key vacía', 'error');
+			$("#key").focus();
+			btnconnect.removeAttr("disabled").text("Conectar");
+			return false;
+		}
 
-			$.ajax({
-				url: ajaxurl,
-				type: "POST",
-				cache: false,
-				data: {
-					action: "connect_clientify",
-					'apikey': apikey,
-					'order_process': orderProcess,
-					'gdpr_status': gdpr_status,
-					'gdpr_text': gdpr_text
-				},
-				success: function(response) {
-					console.log(response);
-					res = JSON.parse(response);
-					console.log('respuesta peticion:', res);
-						if ( res.detail === "Invalid token." ) {
-							statusMessage('Error de conexión token','error');
-							$("#key").focus();
-							btnconnect.removeAttr("disabled").text("Conectar").addClass('connect-class');
-						} else {
-
-							if (res === "null" || 
-									res === "" || 
-									res.data['status'] == "error" || 
-									res.data['status'] == "Invalid token." || 
-									res['status'] == "store_id field not found" ||
-									res.data['status'] == "failed" 
-								) {
-
-								if( res.data['status'] == "failed" ) {
-									statusMessage('other owner with this store')
-									$("#key").focus();
-								} else if ( res.data['status'] == "Invalid token." ) {
-									statusMessage('Error Invalid Token','error')
-									$("#key").focus();
-								}else {
-									statusMessage('Error de conexión Clientify','error')
-									$("#key").focus();
-								}
-									btnconnect.removeAttr("disabled").text("Conectar").addClass('connect-class');		
-								
-							} else {		
-								if ( res.data['status'] == 'success' ) {
-									statusMessage('Conexión Clientify Exitosa','success');
-									btnconnect.attr("disabled", true).text("Conectado").addClass('connected');
-									form.submit();
-									$("#key").focus();
-									var win = window.open('https://new.clientify.com/sales/ecommerce', '_blank');	
-								}
-								if ( response == '' || response == 0 ) {
-										statusMessage('Error al conectar Clientify API Key Vacía','error');
-										$("#key").focus();  // Esta función coloca el foco de escritura del usuario en el campo Nombre directamente.
-									return false;
-								}		
-						
-							}
-						}
+		$.ajax({
+			url: ajaxurl,
+			type: "POST",
+			cache: false,
+			data: {
+				action: "connect_clientify",
+				'apikey': apikey,
+				'order_process': orderProcess,
+				'gdpr_status': gdpr_status,
+				'gdpr_text': gdpr_text
+			},
+			success: function(response) {
+				try { res = (typeof response === 'string') ? JSON.parse(response) : response; } catch(e) { res = {}; }
+				btnconnect.removeAttr("disabled").text("Conectar");
+				if (res.status === 'success') {
+					statusMessage('¡Conectado!', 'success');
+					showAdminNotice(res.message, 'success');
+					btnconnect.attr("disabled", true).text("Conectado").addClass('connected');
+					sessionStorage.setItem('clientify_notice', JSON.stringify({ message: res.message, type: 'success' }));
+					form.submit();
+					if (res.open_url) { window.open(res.open_url, '_blank'); }
+				} else {
+					statusMessage('Error al conectar', 'error');
+					showAdminNotice(res.message || 'Error desconocido al conectar con Clientify.', 'error');
+					$("#key").focus();
 				}
-			});	
-		}		
+			},
+			error: function() {
+				btnconnect.removeAttr("disabled").text("Conectar");
+				statusMessage('Error de red', 'error');
+				showAdminNotice('No se pudo contactar con el servidor. Verifica tu conexión e inténtalo de nuevo.', 'error');
+			}
+		});
   	});
 
 	disconnect.click(function() {
@@ -184,47 +173,41 @@ jQuery(document).ready(function () {
 				   res = 0;
 		btndisconnect.attr("disabled", true).text("Desconectando");
 
-		if( $("#key").val() == "" ){
-        	statusMessage('Error al Conectar Clientify Api Key Vacía','error');
-        	$("#key").focus(); 
-        return false;
-    	}else{
-
-			$.ajax({
-				url: ajaxurl,
-				type: "POST",
-				cache: false,
-				data: {
-					action: "disconnect_clientify",
-					'apikey': apikey,
-				},
-				success: function(response) {				
-					res = JSON.parse(response);
-					console.log(res)
-					if ( res === null || 
-							res.detail == "Invalid token." || 
-							res.data['status'] == "failed" ||
-							res.data['status'] == "error"  
-						) {
-							statusMessage('Error Al Desconectar Clientify','error');
-							$("#key").focus();
-							location.reload();		
-					} else {
-						if ( res.data['status'] == 'success' ) {
-							statusMessage('Desconexión Clientify Exitosa','success');
-							btndisconnect.attr("disabled", true).text("Desconectado");
-							$("#key").focus();
-							form.submit();
-							$("#key").focus();
-						} else {
-							statusMessage('Error Al Desconectar Clientify','error');
-							form.submit();
-							$("#key").focus();
-						}
-					}		
-				}
-			});
+		if ( $("#key").val() === "" ) {
+			statusMessage('API Key vacía', 'error');
+			$("#key").focus();
+			btndisconnect.removeAttr("disabled").text("Desconectar");
+			return false;
 		}
+
+		$.ajax({
+			url: ajaxurl,
+			type: "POST",
+			cache: false,
+			data: {
+				action: "disconnect_clientify",
+				'apikey': apikey,
+			},
+			success: function(response) {
+				try { res = (typeof response === 'string') ? JSON.parse(response) : response; } catch(e) { res = {}; }
+				if (res.status === 'success') {
+					statusMessage('¡Desconectado!', 'success');
+					showAdminNotice(res.message, 'success');
+					btndisconnect.attr("disabled", true).text("Desconectado");
+					sessionStorage.setItem('clientify_notice', JSON.stringify({ message: res.message, type: 'success' }));
+					form.submit();
+				} else {
+					statusMessage('Error al desconectar', 'error');
+					showAdminNotice(res.message || 'Error al desconectar Clientify.', 'error');
+					btndisconnect.removeAttr("disabled").text("Desconectar");
+				}
+			},
+			error: function() {
+				btndisconnect.removeAttr("disabled").text("Desconectar");
+				statusMessage('Error de red', 'error');
+				showAdminNotice('No se pudo contactar con el servidor.', 'error');
+			}
+		});
 		
   	});
 

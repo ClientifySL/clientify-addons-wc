@@ -163,20 +163,25 @@ h2.heading {
 }
 .message {
     display: none;
-    opacity: 1.0;
-    position: absolute;
-    background: #00c01d;
+    position: fixed;
     top: 50%;
-    left: 40%;
+    left: 50%;
     transform: translate(-50%, -50%);
+    z-index: 99999;
+    background: #00c01d;
     padding: 20px 40px;
     color: #fff;
     text-transform: uppercase;
     font-size: 15px;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.2);
 }
 
 .message.bridge_error {
     background: #F05657;
+}
+.message.bridge_success {
+    background: #00c01d;
 }
 .error {
     background: #F05657 !important;

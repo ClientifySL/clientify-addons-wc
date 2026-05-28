@@ -29,9 +29,8 @@ if (!class_exists('Clientify_Api')) {
         /**
          * Método para hacer llamadas HTTP con reintentos automáticos
          */
-        private function make_http_request($url, $args, $method = 'POST', $retry_count = 0)
+        private function make_http_request($url, $args, $method = 'POST', $retry_count = 0, $no_retry = false)
         {
-            // Log de la llamada
             if ( $retry_count > 0 ) {
                 error_log("Clientify API: Reintento $retry_count para $method $url");
             }
@@ -48,12 +47,9 @@ if (!class_exists('Clientify_Api')) {
 
                 error_log("Clientify API Error: $error_code - $error_message (intento " . ($retry_count + 1) . ")");
 
-                // Si es un timeout y no hemos excedido el número de reintentos
-                if (($error_code === 'http_request_failed' || $error_code === 'timeout') && $retry_count < $this->max_retries) {
+                if (!$no_retry && ($error_code === 'http_request_failed' || $error_code === 'timeout') && $retry_count < $this->max_retries) {
                     error_log("Clientify API: Reintentando en " . $this->retry_delay . " segundos...");
-
-                        // Reintentar la llamada
-                    return $this->make_http_request($url, $args, $method, $retry_count + 1);
+                    return $this->make_http_request($url, $args, $method, $retry_count + 1, false);
                 }
 
                 return [
@@ -81,18 +77,22 @@ if (!class_exists('Clientify_Api')) {
                     'Content-Type' => 'application/json',
                     'Authorization' => 'Token ' . $key,
                 ),
-                'timeout' => $this->timeout,
+                'timeout' => 60,
                 'httpversion' => $this->http_version,
                 'sslverify' => $this->ssl_verify
             );
 
-            $response = $this->make_http_request($this->api_url . 'api/ecommerce/v2/connection_by_plugin/', $args);
+            // No retries for connect/disconnect — not idempotent
+            $response = $this->make_http_request($this->api_url . 'api/ecommerce/v2/connection_by_plugin/', $args, 'POST', 0, true);
 
             if (is_array($response) && isset($response['error']) && $response['error']) {
                 return $response;
             }
 
-            return json_decode(wp_remote_retrieve_body($response));
+            return [
+                'http_code' => (int) wp_remote_retrieve_response_code($response),
+                'body'      => json_decode(wp_remote_retrieve_body($response)),
+            ];
         }
 
         public function get_api($end_point)

@@ -60,55 +60,127 @@ class Clientify_Plugin_Core
 	 */
 	function connect_clientify()
 	{
-		$key = $_POST['apikey'] !=	'' ? sanitize_text_field($_POST['apikey']) : get_option('CLIENTIFY_API_KEY');
-		if ( $_POST['apikey'] != '' || get_option('CLIENTIFY_API_KEY') != '' ) {
-			$order_process = isset( $_POST['order_process'] ) ?  $_POST['order_process']  : '';
-			$gdpr_status = isset($_POST['gdpr_status']) ? intval($_POST['gdpr_status']) : 0;
-			$gdpr_text = sanitize_text_field($_POST['gdpr_text']);
-			if (empty($gdpr_text)) {
-				$gdpr_text = 'Acepto recibir comunicaciones comerciales GDPR';
-			}
-			update_option('CLIENTIFY_ORDER_STATUS', $order_process);
-			update_option('clientify_gdpr_text', $gdpr_text);
-			update_option('CLIENTIFY_GDPR', $gdpr_status);
+		$key = ( isset( $_POST['apikey'] ) && $_POST['apikey'] !== '' )
+			? sanitize_text_field( $_POST['apikey'] )
+			: get_option( 'CLIENTIFY_API_KEY' );
 
-			/* generate uid key for connect to clientify */
-			$endpoint_class = new Clientify_Endpoint();
-			$api = new Clientify_Api;
-			$key_uid = $endpoint_class->token_id();
-			$url_base = $endpoint_class->get_local_api_url();
-
-			$post_key = array(
-				'ecommerce' => 'woocommerce',
-				'action'    => 'connect',
-				'store_key' => $key_uid,
-				'name'      => get_option('blogname'),
-				'store_url' => $url_base
-			);
-			
-			$response = $api->post_base_clientify($post_key, $key);
-			
+		if ( empty( $key ) ) {
+			echo json_encode( [ 'status' => 'error', 'message' => 'API Key vacía.' ] );
+			die();
 		}
-		if ( is_null($response) || isset($response->detail) ) {
 
-            $data= is_null($response) != '' ? "error" : $response->detail;
-            $response = array(
-                'data' => array(
-                        	'status' => $data
-                    	)
-                );
-            
-        }else {
-            foreach ( $response as $obj ) {
-                $status = $obj->status;
-            }     
-            if ( $status == 'success' ) {
-    
-				update_option('CLIENTIFY_STATUS', 1);
-				
-            }
-        }
-		echo  json_encode($response);
+		$order_process = isset( $_POST['order_process'] ) ? $_POST['order_process'] : '';
+		$gdpr_status   = isset( $_POST['gdpr_status'] ) ? intval( $_POST['gdpr_status'] ) : 0;
+		$gdpr_text     = sanitize_text_field( isset( $_POST['gdpr_text'] ) ? $_POST['gdpr_text'] : '' );
+		if ( empty( $gdpr_text ) ) {
+			$gdpr_text = 'Acepto recibir comunicaciones comerciales GDPR';
+		}
+		update_option( 'CLIENTIFY_ORDER_STATUS', $order_process );
+		update_option( 'clientify_gdpr_text', $gdpr_text );
+		update_option( 'CLIENTIFY_GDPR', $gdpr_status );
+
+		$endpoint_class = new Clientify_Endpoint();
+		$api            = new Clientify_Api;
+		$key_uid        = $endpoint_class->token_id();
+		$url_base       = $endpoint_class->get_local_api_url();
+
+		$post_key = [
+			'ecommerce' => 'woocommerce',
+			'action'    => 'connect',
+			'store_key' => $key_uid,
+			'name'      => get_option( 'blogname' ),
+			'store_url' => $url_base,
+		];
+
+		$response = $api->post_base_clientify( $post_key, $key );
+
+		// Case 1: network / WP_Error
+		if ( is_array( $response ) && ! empty( $response['error'] ) ) {
+			echo json_encode( [
+				'status'  => 'error',
+				'message' => 'No se pudo conectar con el servidor de Clientify. Verifica tu conexión a internet e inténtalo de nuevo.',
+			] );
+			die();
+		}
+
+		$http_code   = $response['http_code'];
+		$body        = $response['body'];
+		$api_status  = isset( $body->data->status )  ? $body->data->status  : null;
+		$api_message = isset( $body->data->message ) ? $body->data->message : null;
+
+		// Invalid token ({"detail": "..."})
+		if ( isset( $body->detail ) ) {
+			echo json_encode( [
+				'status'  => 'error',
+				'message' => 'API Key inválida. Verifica que la clave sea correcta.',
+			] );
+			die();
+		}
+
+		// Case 2: success
+		if ( $http_code === 200 && $api_status === 'success' ) {
+			update_option( 'CLIENTIFY_STATUS', 1 );
+			echo json_encode( [
+				'status'   => 'success',
+				'message'  => '¡Conexión exitosa! Tu tienda WooCommerce ha sido conectada a Clientify correctamente.',
+				'open_url' => 'https://new.clientify.com/sales/ecommerce',
+			] );
+			die();
+		}
+
+		// Case 3: store owned by another account
+		if ( $http_code === 200 && $api_status === 'failed' && $api_message === 'other owner' ) {
+			echo json_encode( [
+				'status'  => 'error',
+				'message' => 'La URL de tienda ya está conectada a otra cuenta de Clientify. Si crees que es un error, contacta con soporte.',
+			] );
+			die();
+		}
+
+		// Case 4: invalid body
+		if ( $http_code === 200 && $api_status === 'failed' && $api_message === 'Invalid body' ) {
+			echo json_encode( [
+				'status'  => 'error',
+				'message' => 'Los datos enviados no son válidos. Verifica que la URL de la tienda y la clave de API sean correctas.',
+			] );
+			die();
+		}
+
+		// Case 5: HTTP 200 + status = error
+		if ( $http_code === 200 && $api_status === 'error' ) {
+			$msg = $api_message ?: 'Error desconocido';
+			echo json_encode( [
+				'status'  => 'error',
+				'message' => "Error inesperado al conectar: {$msg}. Intenta de nuevo o contacta con soporte.",
+			] );
+			die();
+		}
+
+		// Case 6: HTTP 403 — store limit reached
+		if ( $http_code === 403 ) {
+			$msg = $api_message ?: 'Límite de tiendas alcanzado';
+			echo json_encode( [
+				'status'  => 'error',
+				'message' => "Has alcanzado el límite de tiendas permitidas en tu cuenta de Clientify: {$msg}. Contacta con soporte para ampliar el límite.",
+			] );
+			die();
+		}
+
+		// Case 7: HTTP 406
+		if ( $http_code === 406 ) {
+			$msg = $api_message ?: 'Error desconocido';
+			echo json_encode( [
+				'status'  => 'error',
+				'message' => "Error al procesar la solicitud: {$msg}.",
+			] );
+			die();
+		}
+
+		// Fallback
+		echo json_encode( [
+			'status'  => 'error',
+			'message' => 'Error desconocido al conectar con Clientify. Intenta de nuevo o contacta con soporte.',
+		] );
 		die();
 	}
 	/**
@@ -148,19 +220,26 @@ class Clientify_Plugin_Core
 			);
 			$response = $api->post_base_clientify($post_key, $key);
 		}
-		$status = null;
-		if ( !is_null($response) && !isset($response['error']) ) {
-			foreach ( $response as $obj ) {
-				$status = $obj->status;
-			}
+
+		$api_status = null;
+		if ( isset( $response['body'] ) ) {
+			$api_status = isset( $response['body']->data->status ) ? $response['body']->data->status : null;
 		}
-		//success/ fail / error
-		if ( $status == 'success' || $status == 'failed' || $status == null ||  $status == 'error') {
-			update_option('CLIENTIFY_STATUS', 0);
-			$gdpr_status = 0;
-			update_option('CLIENTIFY_GDPR', $gdpr_status);
+
+		update_option( 'CLIENTIFY_STATUS', 0 );
+		update_option( 'CLIENTIFY_GDPR', 0 );
+
+		if ( $api_status === 'success' ) {
+			echo json_encode( [
+				'status'  => 'success',
+				'message' => 'Desconexión de Clientify realizada correctamente.',
+			] );
+		} else {
+			echo json_encode( [
+				'status'  => 'error',
+				'message' => 'Error al desconectar. La sesión local ha sido cerrada de todas formas.',
+			] );
 		}
-		echo wp_json_encode( $response );
 		die();
 	}
 	/**
