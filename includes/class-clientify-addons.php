@@ -263,8 +263,13 @@ class Clientify_Addons {
 			$this->loader->add_action('woocommerce_add_to_cart', $register_custom_post_type,'clientify_save_add_to_cart', 10, 2);
 			$this->loader->add_action('woocommerce_update_cart_action_cart_updated',$register_custom_post_type, 'clientify_cart_updated', 20, 1);
 			$this->loader->add_action('woocommerce_remove_cart_item', $register_custom_post_type, 'delete_item_cart');
-			$this->loader->add_action( 'woocommerce_thankyou', $register_custom_post_type,'delete_cart' );	
-			/* End Hooks */ 
+			$this->loader->add_action('woocommerce_checkout_create_order', $register_custom_post_type, 'save_session_id_to_order', 10, 2);
+			$this->loader->add_action('woocommerce_checkout_order_created', $register_custom_post_type, 'sync_billing_phone_to_user_meta', 20, 1);
+			$this->loader->add_action('woocommerce_store_api_checkout_order_processed', $register_custom_post_type, 'save_session_id_to_order_blocks', 10, 1);
+			$this->loader->add_action('woocommerce_thankyou', $register_custom_post_type,'delete_cart' );
+			$this->loader->add_action('woocommerce_payment_complete', $register_custom_post_type,'delete_cart' );
+			$this->loader->add_action('woocommerce_order_status_completed', $register_custom_post_type,'delete_cart' );
+	
 			
 		}
 		$this->loader->add_action('wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
@@ -287,10 +292,12 @@ class Clientify_Addons {
 		
 		$this->loader->add_action('wp_ajax_change_gdpr', $register_custom_post_type, 'change_gdpr');
 		$this->loader->add_action('wp_ajax_nopriv_change_gdpr', $register_custom_post_type, 'change_gdpr');
-		// Store user details from the current checkout page.
-			$this->loader->add_action( 'wp_ajax_clientify_save_cart_abandonment_data', $register_custom_post_type, 'clientify_save_cart_abandonment_data'  );
-			$this->loader->add_action( 'wp_ajax_nopriv_clientify_save_cart_abandonment_data', $register_custom_post_type, 'clientify_save_cart_abandonment_data'  );
-		
+
+		// Store user details from the current checkout page — solo si el plugin está conectado.
+		if ( get_option('CLIENTIFY_STATUS') != 0 ) {
+			$this->loader->add_action( 'wp_ajax_clientify_save_cart_abandonment_data', $register_custom_post_type, 'clientify_save_cart_abandonment_data' );
+			$this->loader->add_action( 'wp_ajax_nopriv_clientify_save_cart_abandonment_data', $register_custom_post_type, 'clientify_save_cart_abandonment_data' );
+		}
 	}
 
 	/**

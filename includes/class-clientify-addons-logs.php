@@ -37,7 +37,11 @@ class Clientify_Addons_Logs {
                 );
             } catch (Exception $e) {
                 return false;
-                
+            }
+
+            if ( false === get_transient('clientify_logs_cleaned') ) {
+                self::cleanup_logs(30);
+                set_transient('clientify_logs_cleaned', 1, WEEK_IN_SECONDS);
             }
         }
     

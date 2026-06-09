@@ -20,11 +20,13 @@ if (!class_exists('Clientify_Api')) {
             $response = wp_remote_post(
                 $this->api_url . 'ecommerce/v2/connection_by_plugin/',
                 array(
-                    'body' => json_encode($data),
-                    'headers' => array(
-                        'Content-Type' => 'application/json',
-                        'Authorization' => 'Token ' . $key
-                    )
+                    'body'      => json_encode($data),
+                    'headers'   => array(
+                        'Content-Type'  => 'application/json',
+                        'Authorization' => 'Token ' . $key,
+                    ),
+                    'timeout'   => 60,
+                    'sslverify' => strpos($this->api_url, 'ngrok') === false,
                 )
             );
 
@@ -33,11 +35,13 @@ if (!class_exists('Clientify_Api')) {
                     'error'   => true,
                     'code'    => $response->get_error_code(),
                     'message' => $response->get_error_message(),
-                    'data'    => $response->get_error_data(), // Si hay datos adicionales
                 ];
             }
 
-            return json_decode(wp_remote_retrieve_body($response));
+            return [
+                'http_code' => wp_remote_retrieve_response_code($response),
+                'body'      => json_decode(wp_remote_retrieve_body($response)),
+            ];
         }
 
         public function get_api($end_point)

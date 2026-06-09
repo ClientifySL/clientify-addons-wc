@@ -127,51 +127,19 @@ jQuery(document).ready(function () {
 					'gdpr_text': gdpr_text
 				},
 				success: function(response) {
-					console.log(response);
-					res = JSON.parse(response);
-					console.log('respuesta peticion:', res);
-						if ( res.detail === "Invalid token." ) {
-							statusMessage('Error de conexión token','error');
-							$("#key").focus();
-							btnconnect.removeAttr("disabled").text("Conectar").addClass('connect-class');
-						} else {
-
-							if (res === "null" || 
-									res === "" || 
-									res.data['status'] == "error" || 
-									res.data['status'] == "Invalid token." || 
-									res['status'] == "store_id field not found" ||
-									res.data['status'] == "failed" 
-								) {
-
-								if( res.data['status'] == "failed" ) {
-									statusMessage('other owner with this store')
-									$("#key").focus();
-								} else if ( res.data['status'] == "Invalid token." ) {
-									statusMessage('Error Invalid Token','error')
-									$("#key").focus();
-								}else {
-									statusMessage('Error de conexión Clientify','error')
-									$("#key").focus();
-								}
-									btnconnect.removeAttr("disabled").text("Conectar").addClass('connect-class');		
-								
-							} else {		
-								if ( res.data['status'] == 'success' ) {
-									statusMessage('Conexión Clientify Exitosa','success');
-									btnconnect.attr("disabled", true).text("Conectado").addClass('connected');
-									form.submit();
-									$("#key").focus();
-									var win = window.open('http://app.clientify.com/ecommerce/settingsv2/list-store/woocommerce', '_blank');	
-								}
-								if ( response == '' || response == 0 ) {
-										statusMessage('Error al conectar Clientify API Key Vacía','error');
-										$("#key").focus();  // Esta función coloca el foco de escritura del usuario en el campo Nombre directamente.
-									return false;
-								}		
-						
-							}
-						}
+					try { res = JSON.parse(response); } catch(e) { res = {}; }
+					if ( res.status === 'success' ) {
+						statusMessage(res.message || 'Conexión Clientify Exitosa', 'success');
+						btnconnect.attr("disabled", true).text("Conectado").addClass('connected');
+						form.submit();
+						if ( res.open_url ) { window.open(res.open_url, '_blank'); }
+					} else {
+						var msg = res.message || 'Error de conexión Clientify';
+						if ( res.detail ) { msg += ' — ' + res.detail; }
+						statusMessage(msg, 'error');
+						$("#key").focus();
+						btnconnect.removeAttr("disabled").text("Conectar").addClass('connect-class');
+					}
 				}
 			});	
 		}		
@@ -198,30 +166,16 @@ jQuery(document).ready(function () {
 					action: "disconnect_clientify",
 					'apikey': apikey,
 				},
-				success: function(response) {				
-					res = JSON.parse(response);
-					console.log(res)
-					if ( res === null || 
-							res.detail == "Invalid token." || 
-							res.data['status'] == "failed" ||
-							res.data['status'] == "error"  
-						) {
-							statusMessage('Error Al Desconectar Clientify','error');
-							$("#key").focus();
-							location.reload();		
+				success: function(response) {
+					try { res = JSON.parse(response); } catch(e) { res = {}; }
+					if ( res.status === 'success' ) {
+						statusMessage(res.message || 'Desconexión Clientify Exitosa', 'success');
+						btndisconnect.attr("disabled", true).text("Desconectado");
+						form.submit();
 					} else {
-						if ( res.data['status'] == 'success' ) {
-							statusMessage('Desconexión Clientify Exitosa','success');
-							btndisconnect.attr("disabled", true).text("Desconectado");
-							$("#key").focus();
-							form.submit();
-							$("#key").focus();
-						} else {
-							statusMessage('Error Al Desconectar Clientify','error');
-							form.submit();
-							$("#key").focus();
-						}
-					}		
+						statusMessage(res.message || 'Error al desconectar Clientify', 'error');
+						location.reload();
+					}
 				}
 			});
 		}

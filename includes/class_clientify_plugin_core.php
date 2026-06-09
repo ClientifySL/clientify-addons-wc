@@ -60,55 +60,116 @@ class Clientify_Plugin_Core
 	 */
 	function connect_clientify()
 	{
-		$key = $_POST['apikey'] !=	'' ? sanitize_text_field($_POST['apikey']) : get_option('CLIENTIFY_API_KEY');
-		if ( $_POST['apikey'] != '' || get_option('CLIENTIFY_API_KEY') != '' ) {
-			$order_process = isset( $_POST['order_process'] ) ?  $_POST['order_process']  : '';
-			$gdpr_status = isset($_POST['gdpr_status']) ? intval($_POST['gdpr_status']) : 0;
-			$gdpr_text = sanitize_text_field($_POST['gdpr_text']);
-			if (empty($gdpr_text)) {
-				$gdpr_text = 'Acepto recibir comunicaciones comerciales GDPR';
-			}
-			update_option('CLIENTIFY_ORDER_STATUS', $order_process);
-			update_option('clientify_gdpr_text', $gdpr_text);
-			update_option('CLIENTIFY_GDPR', $gdpr_status);
+		$key = ( isset( $_POST['apikey'] ) && $_POST['apikey'] !== '' )
+			? sanitize_text_field( $_POST['apikey'] )
+			: get_option( 'CLIENTIFY_API_KEY' );
 
-			/* generate uid key for connect to clientify */
-			$endpoint_class = new Clientify_Endpoint();
-			$api = new Clientify_Api;
-			$key_uid = $endpoint_class->token_id();
-			$url_base = $endpoint_class->get_local_api_url();
-
-			$post_key = array(
-				'ecommerce' => 'woocommerce',
-				'action'    => 'connect',
-				'store_key' => $key_uid,
-				'name'      => get_option('blogname'),
-				'store_url' => $url_base
-			);
-			
-			$response = $api->post_base_clientify($post_key, $key);
-			
+		if ( empty( $key ) ) {
+			echo json_encode( [ 'status' => 'error', 'message' => 'API Key vacía.' ] );
+			die();
 		}
-		if ( is_null($response) || isset($response->detail) ) {
 
-            $data= is_null($response) != '' ? "error" : $response->detail;
-            $response = array(
-                'data' => array(
-                        	'status' => $data
-                    	)
-                );
-            
-        }else {
-            foreach ( $response as $obj ) {
-                $status = $obj->status;
-            }     
-            if ( $status == 'success' ) {
-    
-				update_option('CLIENTIFY_STATUS', 1);
-				
-            }
-        }
-		echo  json_encode($response);
+		$order_process = isset( $_POST['order_process'] ) ? $_POST['order_process'] : '';
+		$gdpr_status   = isset( $_POST['gdpr_status'] ) ? intval( $_POST['gdpr_status'] ) : 0;
+		$gdpr_text     = sanitize_text_field( isset( $_POST['gdpr_text'] ) ? $_POST['gdpr_text'] : '' );
+		if ( empty( $gdpr_text ) ) {
+			$gdpr_text = 'Acepto recibir comunicaciones comerciales GDPR';
+		}
+		update_option( 'CLIENTIFY_ORDER_STATUS', $order_process );
+		update_option( 'clientify_gdpr_text', $gdpr_text );
+		update_option( 'CLIENTIFY_GDPR', $gdpr_status );
+
+		$endpoint_class = new Clientify_Endpoint();
+		$api            = new Clientify_Api;
+		$key_uid        = $endpoint_class->token_id();
+		$url_base       = $endpoint_class->get_local_api_url();
+
+		$post_key = [
+			'ecommerce' => 'woocommerce',
+			'action'    => 'connect',
+			'store_key' => $key_uid,
+			'name'      => get_option( 'blogname' ),
+			'store_url' => $url_base,
+		];
+
+		$response = $api->post_base_clientify( $post_key, $key );
+
+		// Case 1: network / WP_Error
+		if ( is_array( $response ) && ! empty( $response['error'] ) ) {
+			echo json_encode( [
+				'status'  => 'error',
+				'message' => 'No se pudo conectar con el servidor de Clientify. Verifica tu conexión a internet e inténtalo de nuevo.',
+				'detail'  => '[' . $response['code'] . '] ' . $response['message'],
+			] );
+			die();
+		}
+
+		$http_code   = $response['http_code'];
+		$body        = $response['body'];
+		$api_status  = isset( $body->data->status )  ? $body->data->status  : null;
+		$api_message = isset( $body->data->message ) ? $body->data->message : null;
+		$detail      = isset( $body->detail )        ? strtolower( trim( $body->detail ) ) : '';
+
+		// Success
+		if ( $http_code === 200 && $api_status === 'success' ) {
+			update_option( 'CLIENTIFY_STATUS', 1 );
+			echo json_encode( [
+				'status'   => 'success',
+				'message'  => '¡Conexión exitosa! Tu tienda WooCommerce ha sido conectada a Clientify correctamente.',
+				'open_url' => 'https://new.clientify.com/sales/ecommerce',
+			] );
+			die();
+		}
+
+		// Known api_message errors (HTTP 200 with business-logic failure)
+		$api_message_map = [
+			'other owner'  => 'La URL de tienda ya está conectada a otra cuenta de Clientify. Si crees que es un error, contacta con soporte.',
+			'Invalid body' => 'Los datos enviados no son válidos. Verifica que la URL de la tienda y la clave de API sean correctas.',
+		];
+		if ( $http_code === 200 && $api_status === 'failed' && isset( $api_message_map[ $api_message ] ) ) {
+			echo json_encode( [ 'status' => 'error', 'message' => $api_message_map[ $api_message ] ] );
+			die();
+		}
+
+		// Known HTTP error detail strings (language from DRF / Clientify API)
+		$detail_map = [
+			'you do not have permission to perform this action.' => 'Tu API Key no tiene permisos para realizar esta acción en Clientify.',
+			'store limit reached'                               => 'Has alcanzado el límite de tiendas permitidas en tu plan de Clientify.',
+			'ecommerce limit reached'                           => 'Has alcanzado el límite de tiendas permitidas en tu plan de Clientify.',
+			'authentication credentials were not provided.'     => 'No se proporcionaron credenciales de autenticación. Verifica tu API Key.',
+			'invalid token.'                                    => 'API Key inválida. Verifica que la clave sea correcta.',
+		];
+
+		// HTTP code fallback labels
+		$http_code_map = [
+			400 => 'Solicitud incorrecta (400). Verifica los datos enviados.',
+			401 => 'API Key inválida o expirada (401). Verifica que la clave sea correcta.',
+			403 => 'límite de tiendas alcanzado (403).',
+			404 => 'Endpoint no encontrado (404). Contacta con soporte.',
+			406 => 'Formato de solicitud no aceptado (406).',
+			429 => 'Demasiadas solicitudes (429). Espera un momento e inténtalo de nuevo.',
+			500 => 'Error interno del servidor de Clientify (500). Inténtalo más tarde.',
+			502 => 'Servidor de Clientify no disponible (502). Inténtalo más tarde.',
+			503 => 'Servicio de Clientify no disponible (503). Inténtalo más tarde.',
+		];
+
+		if ( $detail && isset( $detail_map[ $detail ] ) ) {
+			$msg = $detail_map[ $detail ];
+		} elseif ( isset( $http_code_map[ $http_code ] ) ) {
+			$msg = $http_code_map[ $http_code ];
+			if ( $detail ) {
+				$msg .= " Detalle: {$body->detail}";
+			} elseif ( $api_message ) {
+				$msg .= " Detalle: {$api_message}";
+			}
+		} elseif ( $http_code >= 400 ) {
+			$extra = $detail ?: $api_message ?: '';
+			$msg   = "Error al conectar con Clientify (HTTP {$http_code})." . ( $extra ? " Detalle: {$extra}" : '' );
+		} else {
+			$msg = 'Respuesta inesperada de Clientify. Intenta de nuevo o contacta con soporte.';
+		}
+
+		echo json_encode( [ 'status' => 'error', 'message' => $msg . ' Contacta con soporte si el problema persiste.' ] );
 		die();
 	}
 	/**
@@ -148,16 +209,26 @@ class Clientify_Plugin_Core
 			);
 			$response = $api->post_base_clientify($post_key, $key);
 		}
-		foreach ( $response as $obj ) {
-			$status = $obj->status;	
+
+		$api_status = null;
+		if ( isset( $response['body'] ) ) {
+			$api_status = isset( $response['body']->data->status ) ? $response['body']->data->status : null;
 		}
-		//success/ fail / error
-		if ( $status == 'success' || $status == 'failed' || $status == null ||  $status == 'error') {
-			update_option('CLIENTIFY_STATUS', 0);
-			$gdpr_status = 0;
-			update_option('CLIENTIFY_GDPR', $gdpr_status);
+
+		update_option( 'CLIENTIFY_STATUS', 0 );
+		update_option( 'CLIENTIFY_GDPR', 0 );
+
+		if ( $api_status === 'success' ) {
+			echo json_encode( [
+				'status'  => 'success',
+				'message' => 'Desconexión de Clientify realizada correctamente.',
+			] );
+		} else {
+			echo json_encode( [
+				'status'  => 'error',
+				'message' => 'Error al desconectar. La sesión local ha sido cerrada de todas formas.',
+			] );
 		}
-		echo wp_json_encode( $response );
 		die();
 	}
 	/**
@@ -573,6 +644,7 @@ function agregar_opcion_suscripcion($menu_items) {
 	 * @param    int                  $prodcut_id    The product's id number.
 	 */
 	function product_published($product_id){
+		$clientify_product = null;
 
 		$endpoint_class = new Clientify_Endpoint();
 		$product = wc_get_product( $product_id );
@@ -789,7 +861,8 @@ function agregar_opcion_suscripcion($menu_items) {
 				$lang = get_bloginfo("language");
 				$products = $order->get_items();
 				$currency = $order->get_currency();
-
+				$order_tags = array();
+				
 				foreach ( $products as $order_product ) {
 
 					$categories = array();
@@ -1055,6 +1128,11 @@ function agregar_opcion_suscripcion($menu_items) {
 					}
 				}
 
+				// Email siempre desde facturación de la orden al enviar a Clientify
+				if ( is_array($contact) && !empty($order->get_billing_email()) ) {
+					$contact['email'] = $order->get_billing_email();
+				}
+
 				$shipping = $order_data['shipping_total'];
 
 				if ($shipping === 0 || $shipping === "0" || $shipping === '' || $shipping === null || $shipping === false ) {
@@ -1062,6 +1140,11 @@ function agregar_opcion_suscripcion($menu_items) {
 				}
 
 				$coupons = $order->get_coupon_codes();
+				$tipo_orden = $order->get_meta('tipodeorden');
+                if (!empty($tipo_orden) && !in_array($tipo_orden, $order_tags)) {
+                    $order_tags[] = $tipo_orden;
+                }
+            
 
 				$data = array(
 
@@ -1078,6 +1161,7 @@ function agregar_opcion_suscripcion($menu_items) {
 					'shipping' 	 => $shipping,
 					'price'	     =>  number_format($total_price, 2, '.', ''),
 					'coupon'     => 0,
+					'order_tags' => $order_tags
 				);
 
 				if ($coupons) {
@@ -1164,6 +1248,55 @@ function agregar_opcion_suscripcion($menu_items) {
 		}*/
 	}
 	/**
+	 * Save session_id to order when order is being created (BEFORE saved).
+	 * This is critical for payment gateways like Redsys that notify via server-to-server POST,
+	 * where there's no user session available when the payment is completed.
+	 *
+	 * Hook: woocommerce_checkout_create_order (ANTES de guardar la orden)
+	 * Este hook recibe el objeto $order y $data
+	 *
+	 * @since    1.1.0
+	 * @param    WC_Order             $order       The order object (not saved yet).
+	 * @param    array                $data        Checkout form data.
+	 *
+	 */
+	function save_session_id_to_order($order, $data) {
+		// Verificar que WC()->session esté disponible
+		if (WC()->session) {
+			$wcf_session_id = WC()->session->get( 'wcf_session_id' );
+			
+			// Si existe un session_id, guardarlo en los metadatos de la orden
+			if ($wcf_session_id) {
+				// No necesitamos $order->save() aquí porque la orden se guarda automáticamente después
+				$order->update_meta_data( '_wcf_session_id', $wcf_session_id );
+			}
+		}
+	}
+
+	/**
+	 * Save session_id to order for WooCommerce Blocks checkout.
+	 * Similar to save_session_id_to_order but for the Blocks checkout flow.
+	 *
+	 * Hook: woocommerce_store_api_checkout_order_processed
+	 *
+	 * @since    1.1.0
+	 * @param    WC_Order             $order       The order object.
+	 *
+	 */
+	function save_session_id_to_order_blocks($order) {
+		// Verificar que WC()->session esté disponible
+		if (WC()->session) {
+			$wcf_session_id = WC()->session->get( 'wcf_session_id' );
+			
+			// Si existe un session_id, guardarlo en los metadatos de la orden
+			if ($wcf_session_id) {
+				$order->update_meta_data( '_wcf_session_id', $wcf_session_id );
+				$order->save(); // En Blocks sí necesitamos guardar explícitamente
+			}
+		}
+	}
+
+	/**
 	 * Delete cart if purchase is complete.
 	 *
 	 * @since    1.1.0
@@ -1171,18 +1304,25 @@ function agregar_opcion_suscripcion($menu_items) {
 
 	 */
 	function delete_cart($order_id) {
-		// Obtener el ID de sesión de WooCommerce
-		$wcf_session_id = WC()->session->get( 'wcf_session_id' );
-	
-		// Asociar el ID de sesión con la orden
 		$order = wc_get_order( $order_id );
-		$order->update_meta_data( '_wcf_session_id', $wcf_session_id );
-		$order->save();
-	
-		// Obtener el ID de sesión asociado a la orden
+		
+		if (!$order) {
+			return;
+		}
+		
+
 		$wcf_session_id = $order->get_meta('_wcf_session_id');
+		
 	
-		// Si se encuentra el ID de sesión, eliminar la entrada correspondiente en la tabla de carritos abandonados
+		if (empty($wcf_session_id) && WC()->session) {
+			$wcf_session_id = WC()->session->get( 'wcf_session_id' );
+			
+			if ($wcf_session_id) {
+				$order->update_meta_data( '_wcf_session_id', $wcf_session_id );
+				$order->save();
+			}
+		}
+		
 		if ($wcf_session_id) {
 			global $wpdb;
 			$cart_abandonment_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';
@@ -1810,13 +1950,24 @@ function agregar_opcion_suscripcion($menu_items) {
 		if (isset($posted_data['billing_country_code'])) {
 			$country_code = $posted_data['billing_country_code'];
 			$phone_number = isset($posted_data['billing_phone']) ? $posted_data['billing_phone'] : '';
-	
+
 			if (!empty($phone_number)) {
 				$posted_data['billing_phone'] = '+' . $country_code . ' ' . $phone_number;
 			}
 		}
-	
+
 		return $posted_data;
+	}
+
+	function sync_billing_phone_to_user_meta( $order ) {
+		$user_id = $order->get_user_id();
+		if ( ! $user_id ) {
+			return;
+		}
+		$phone = $order->get_billing_phone();
+		if ( ! empty( $phone ) ) {
+			update_user_meta( $user_id, 'billing_phone', $phone );
+		}
 	}
 
 }
