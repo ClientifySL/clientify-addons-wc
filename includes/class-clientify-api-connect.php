@@ -14,8 +14,8 @@ if (!class_exists('Clientify_Api')) {
         var $timeout = 30; // Timeout en segundos para las llamadas HTTP
 
         // Configuración de la API
-        // var $api_url = 'https://api-plus.clientify.com/';
-        var $api_url = 'https://ecommerce-aly.ngrok.io/';
+        var $api_url = 'https://api-plus.clientify.com/';
+        // var $api_url = 'https://ecommerce-aly.ngrok.io/';
 
         // Configuración de SSL y HTTP
         var $ssl_verify = true;

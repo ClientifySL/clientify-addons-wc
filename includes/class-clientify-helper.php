@@ -34,6 +34,23 @@ class Clientify_Helper {
 	public function __construct() {
 	}
 
+	public static function parse_date_flexible( $date_str, $output_format = 'Y-m-d' ) {
+		$formats = [
+			'Y-m-d\TH:i:sP', 'Y-m-d\TH:i:s', 'Y-m-d H:i:s',
+			'Y-m-d', 'Y/m/d',
+			'd-m-Y', 'd/m/Y',
+			'm-d-Y', 'm/d/Y',
+		];
+		foreach ( $formats as $fmt ) {
+			$dt = DateTime::createFromFormat( $fmt, $date_str );
+			if ( $dt !== false ) {
+				return $dt->format( $output_format );
+			}
+		}
+		$ts = strtotime( $date_str );
+		return $ts !== false ? date( $output_format, $ts ) : date( $output_format );
+	}
+
 	/**
 	 * Get checkout url.
 	 *

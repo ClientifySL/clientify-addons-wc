@@ -191,31 +191,52 @@ class Clientify_Endpoint {
         
         $endpoint_class = new Clientify_Endpoint();
         $url_base = $endpoint_class->get_local_api_url();
-        $created_at_min = empty($params->get_param('created_at_min')) ? date('d-m-Y') : $params->get_param('created_at_min');
-        $created_at_end = empty($params->get_param('created_at_end')) ? date('d-m-Y', strtotime('+1 day'))  : date('d-m-Y', strtotime($params->get_param('created_at_end') . ' +1 day'));
-        $per_page = $params->get_param('per_page');
-        $paged = ($params->get_param('page')) ? $params->get_param('page') : 1;
-        $offset = ( $per_page * $paged ) - $per_page;
+        $created_at_min = empty($params->get_param('created_at_min')) ? date('Y-m-d') : Clientify_Helper::parse_date_flexible($params->get_param('created_at_min'), 'Y-m-d');
+        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d', strtotime('+1 day')) : date('Y-m-d', strtotime(Clientify_Helper::parse_date_flexible($params->get_param('created_at_end'), 'Y-m-d') . ' +1 day'));
+        $per_page = max(1, intval($params->get_param('per_page') ?: 25));
+        $paged    = max(1, intval($params->get_param('page') ?: 1));
         $order_status_settings = get_option('CLIENTIFY_ORDER_STATUS');
-		$args = array(			
-            'date_query' => array(
-                'after' => $created_at_min,
-                'before' => $created_at_end,
-            ),
+
+        // Paso 1: solo IDs del rango de fechas (query liviana)
+        $all_ids = wc_get_orders([
+            'date_created' => $created_at_min . '...' . $created_at_end,
+            'status'       => $order_status_settings,
             'orderby'      => 'ID',
             'order'        => 'ASC',
-            'limit'        => isset($per_page) ? $per_page : -1,
-            'offset'       => $offset,
-            'paged'        => $paged,
-            'status'       => $order_status_settings,
-			'return'       => '*'
-		   ); 
+            'limit'        => -1,
+            'return'       => 'ids',
+            'type'         => 'shop_order',
+        ]);
 
-        $orders = wc_get_orders($args);
-       
+        // Paso 2: filtrar en SQL solo los que tienen productos activos
+        $valid_ids = [];
+        if (!empty($all_ids)) {
+            $placeholders = implode(',', array_fill(0, count($all_ids), '%d'));
+            $valid_ids = $wpdb->get_col(
+                $wpdb->prepare(
+                    "SELECT DISTINCT oi.order_id
+                     FROM {$wpdb->prefix}woocommerce_order_items oi
+                     INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim
+                         ON oim.order_item_id = oi.order_item_id AND oim.meta_key = '_product_id'
+                     INNER JOIN {$wpdb->posts} p
+                         ON p.ID = oim.meta_value
+                         AND p.post_type IN ('product','product_variation')
+                         AND p.post_status NOT IN ('trash','auto-draft')
+                     WHERE oi.order_id IN ($placeholders)
+                     AND oi.order_item_type = 'line_item'",
+                    ...$all_ids
+                )
+            );
+            // Preservar orden original por ID ASC
+            $valid_ids = array_values(array_intersect($all_ids, array_map('intval', $valid_ids)));
+        }
+
+        // Paso 3: paginar sobre IDs válidos y cargar solo los objetos de esta página
+        $page_ids = array_slice($valid_ids, ($paged - 1) * $per_page, $per_page);
+        $orders   = array_filter(array_map('wc_get_order', $page_ids));
+
         $all = array();
-
-        foreach( $orders as $order ) {  
+        foreach( $orders as $order ) {
 
             if ( $order->get_type() === 'shop_order_refund' ) {
                 continue;
@@ -275,7 +296,7 @@ class Clientify_Endpoint {
                     $product = $order_product->get_product();
                     if (!$product) {
                         continue;
-                    } 
+                    }
                     try {
                         $sku = $product->get_sku();
                     } catch (Exception $e) {
@@ -494,12 +515,15 @@ class Clientify_Endpoint {
 
         }//endforeach
 		
+        $total_pages = $per_page > 0 ? ceil(count($valid_ids) / $per_page) : 1;
         $response = new WP_REST_Response($all, 200);
-   
+        $response->header('X-WP-Total', count($valid_ids));
+        $response->header('X-WP-TotalPages', $total_pages);
+
 		return $response;
 
 	}
-    
+
     function webhooks_status($params)
     {
         global $wpdb;
@@ -648,8 +672,8 @@ class Clientify_Endpoint {
         global $wpdb;
 
         // Obtener parámetros y saneamiento
-        $created_at_min = date("Y-m-d", strtotime($params->get_param('created_at_min')));
-        $created_at_end = empty($params->get_param('created_at_end')) ? date("Y-m-d") : date("Y-m-d", strtotime($params->get_param('created_at_end')));
+        $created_at_min = empty($params->get_param('created_at_min')) ? date("Y-m-d") : Clientify_Helper::parse_date_flexible($params->get_param('created_at_min'), 'Y-m-d');
+        $created_at_end = empty($params->get_param('created_at_end')) ? date("Y-m-d") : Clientify_Helper::parse_date_flexible($params->get_param('created_at_end'), 'Y-m-d');
         $per_page = max(1, intval($params->get_param('per_page', 25)));
         $paged = max(1, intval($params->get_param('page', 1)));
         $offset = ($paged - 1) * $per_page;
@@ -1440,10 +1464,12 @@ class Clientify_Endpoint {
 
         }//foreach
         
-        $response = new WP_REST_Response($all, 200);        
-        //$response->header( 'Link', $total_pages); // maximum number of pages 
+        $total_pages = $per_page > 0 ? ceil(count($valid_ids) / $per_page) : 1;
+        $response = new WP_REST_Response($all, 200);
+        $response->header('X-WP-Total', count($valid_ids));
+        $response->header('X-WP-TotalPages', $total_pages);
         return $response;
-		
+
 	}
 
     /* sync abandonded carts - revised*/
@@ -1747,28 +1773,45 @@ class Clientify_Endpoint {
         
         $endpoint_class = new Clientify_Endpoint();
         $url_base = $endpoint_class->get_local_api_url();
-        $created_at_min = empty($params->get_param('created_at_min')) ? date('d-m-Y') : $params->get_param('created_at_min');
-        $created_at_end = empty($params->get_param('created_at_end')) ? date('d-m-Y', strtotime('+1 day'))  : date('d-m-Y', strtotime($params->get_param('created_at_end') . ' +1 day'));
-        $per_page = $params->get_param('per_page');
-        $paged = ($params->get_param('page')) ? $params->get_param('page') : 1;
-        $offset = ( $per_page * $paged ) - $per_page;
+        $created_at_min = empty($params->get_param('created_at_min')) ? date('Y-m-d') : Clientify_Helper::parse_date_flexible($params->get_param('created_at_min'), 'Y-m-d');
+        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d', strtotime('+1 day')) : date('Y-m-d', strtotime(Clientify_Helper::parse_date_flexible($params->get_param('created_at_end'), 'Y-m-d') . ' +1 day'));
+        $per_page = max(1, intval($params->get_param('per_page') ?: 25));
+        $paged    = max(1, intval($params->get_param('page') ?: 1));
         $order_status_settings = get_option('CLIENTIFY_ORDER_STATUS');
 
-        $args = array(          
-            'date_query' => array(
-                'after' => $created_at_min,
-                'before' => $created_at_end,
-            ),
+        $all_ids = wc_get_orders([
+            'date_created' => $created_at_min . '...' . $created_at_end,
+            'status'       => $order_status_settings,
             'orderby'      => 'ID',
             'order'        => 'ASC',
-            'limit'        => isset($per_page) ? $per_page : -1,
-            'offset'       => $offset,
-            'paged'        => $paged,
-            'status'       => $order_status_settings,
-            'return'       => '*'
-           ); 
-        
-        $orders = wc_get_orders($args);
+            'limit'        => -1,
+            'return'       => 'ids',
+            'type'         => 'shop_order',
+        ]);
+
+        $valid_ids = [];
+        if (!empty($all_ids)) {
+            $placeholders = implode(',', array_fill(0, count($all_ids), '%d'));
+            $valid_ids = $wpdb->get_col(
+                $wpdb->prepare(
+                    "SELECT DISTINCT oi.order_id
+                     FROM {$wpdb->prefix}woocommerce_order_items oi
+                     INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim
+                         ON oim.order_item_id = oi.order_item_id AND oim.meta_key = '_product_id'
+                     INNER JOIN {$wpdb->posts} p
+                         ON p.ID = oim.meta_value
+                         AND p.post_type IN ('product','product_variation')
+                         AND p.post_status NOT IN ('trash','auto-draft')
+                     WHERE oi.order_id IN ($placeholders)
+                     AND oi.order_item_type = 'line_item'",
+                    ...$all_ids
+                )
+            );
+            $valid_ids = array_values(array_intersect($all_ids, array_map('intval', $valid_ids)));
+        }
+
+        $page_ids = array_slice($valid_ids, ($paged - 1) * $per_page, $per_page);
+        $orders   = array_filter(array_map('wc_get_order', $page_ids));
        
         $all = array();
         $result_sync = array();
@@ -2023,7 +2066,7 @@ class Clientify_Endpoint {
                     'store_url' => $url_base,
                     'currency' => $currency,
                     'products' => $items,
-                    'price' =>  $total_price,
+                    'price' =>  number_format($total_price, 2, '.', ''),
                     'shipping' => $shipping,
                     'coupon' => $order_discount_total,
                     'order_tags' => $order_tags
@@ -2035,7 +2078,7 @@ class Clientify_Endpoint {
                         }
                         $data['coupon_tags'] = $coupons_tags;
                     }
-                
+
                     if ( !empty($lang) ) {
                         $data['custom_field'] = array(
                         'field' => 'ecommerce_language',
@@ -2046,9 +2089,8 @@ class Clientify_Endpoint {
                 if ( $contact && !empty($items) ) {
                     $order = $api->post_order_clientify( $data );
                     $result_sync [] = $order;
+                    $all [] = array($data);
                 }
-
-                $all [] = $data;
 
                 
             }//endif
@@ -2066,8 +2108,8 @@ class Clientify_Endpoint {
     function sync_contacts($params){
 
 
-        $created_at_min = date("Y-m-d", strtotime($params->get_param('created_at_min')));
-        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d', strtotime('+1 day')) : date('Y-m-d', strtotime($params->get_param('created_at_end') . ' +1 day'));
+        $created_at_min = empty($params->get_param('created_at_min')) ? date('Y-m-d') : Clientify_Helper::parse_date_flexible($params->get_param('created_at_min'), 'Y-m-d');
+        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d', strtotime('+1 day')) : date('Y-m-d', strtotime(Clientify_Helper::parse_date_flexible($params->get_param('created_at_end'), 'Y-m-d') . ' +1 day'));
         $per_page = intval($params->get_param('per_page'));
         $paged = intval($params->get_param('page', 1));
         $url_base = $this->get_local_api_url();
