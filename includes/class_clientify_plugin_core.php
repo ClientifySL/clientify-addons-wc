@@ -107,17 +107,9 @@ class Clientify_Plugin_Core
 		$body        = $response['body'];
 		$api_status  = isset( $body->data->status )  ? $body->data->status  : null;
 		$api_message = isset( $body->data->message ) ? $body->data->message : null;
+		$detail      = isset( $body->detail )        ? strtolower( trim( $body->detail ) ) : '';
 
-		// Invalid token ({"detail": "..."})
-		if ( isset( $body->detail ) ) {
-			echo json_encode( [
-				'status'  => 'error',
-				'message' => 'API Key inválida. Verifica que la clave sea correcta.',
-			] );
-			die();
-		}
-
-		// Case 2: success
+		// Success
 		if ( $http_code === 200 && $api_status === 'success' ) {
 			update_option( 'CLIENTIFY_STATUS', 1 );
 			echo json_encode( [
@@ -128,59 +120,55 @@ class Clientify_Plugin_Core
 			die();
 		}
 
-		// Case 3: store owned by another account
-		if ( $http_code === 200 && $api_status === 'failed' && $api_message === 'other owner' ) {
-			echo json_encode( [
-				'status'  => 'error',
-				'message' => 'La URL de tienda ya está conectada a otra cuenta de Clientify. Si crees que es un error, contacta con soporte.',
-			] );
+		// Known api_message errors (HTTP 200 with business-logic failure)
+		$api_message_map = [
+			'other owner'  => 'La URL de tienda ya está conectada a otra cuenta de Clientify. Si crees que es un error, contacta con soporte.',
+			'Invalid body' => 'Los datos enviados no son válidos. Verifica que la URL de la tienda y la clave de API sean correctas.',
+		];
+		if ( $http_code === 200 && $api_status === 'failed' && isset( $api_message_map[ $api_message ] ) ) {
+			echo json_encode( [ 'status' => 'error', 'message' => $api_message_map[ $api_message ] ] );
 			die();
 		}
 
-		// Case 4: invalid body
-		if ( $http_code === 200 && $api_status === 'failed' && $api_message === 'Invalid body' ) {
-			echo json_encode( [
-				'status'  => 'error',
-				'message' => 'Los datos enviados no son válidos. Verifica que la URL de la tienda y la clave de API sean correctas.',
-			] );
-			die();
+		// Known HTTP error detail strings (language from DRF / Clientify API)
+		$detail_map = [
+			'you do not have permission to perform this action.' => 'Tu API Key no tiene permisos para realizar esta acción en Clientify.',
+			'store limit reached'                               => 'Has alcanzado el límite de tiendas permitidas en tu plan de Clientify.',
+			'ecommerce limit reached'                           => 'Has alcanzado el límite de tiendas permitidas en tu plan de Clientify.',
+			'authentication credentials were not provided.'     => 'No se proporcionaron credenciales de autenticación. Verifica tu API Key.',
+			'invalid token.'                                    => 'API Key inválida. Verifica que la clave sea correcta.',
+		];
+
+		// HTTP code fallback labels
+		$http_code_map = [
+			400 => 'Solicitud incorrecta (400). Verifica los datos enviados.',
+			401 => 'API Key inválida o expirada (401). Verifica que la clave sea correcta.',
+			403 => 'límite de tiendas alcanzado (403).',
+			404 => 'Endpoint no encontrado (404). Contacta con soporte.',
+			406 => 'Formato de solicitud no aceptado (406).',
+			429 => 'Demasiadas solicitudes (429). Espera un momento e inténtalo de nuevo.',
+			500 => 'Error interno del servidor de Clientify (500). Inténtalo más tarde.',
+			502 => 'Servidor de Clientify no disponible (502). Inténtalo más tarde.',
+			503 => 'Servicio de Clientify no disponible (503). Inténtalo más tarde.',
+		];
+
+		if ( $detail && isset( $detail_map[ $detail ] ) ) {
+			$msg = $detail_map[ $detail ];
+		} elseif ( isset( $http_code_map[ $http_code ] ) ) {
+			$msg = $http_code_map[ $http_code ];
+			if ( $detail ) {
+				$msg .= " Detalle: {$body->detail}";
+			} elseif ( $api_message ) {
+				$msg .= " Detalle: {$api_message}";
+			}
+		} elseif ( $http_code >= 400 ) {
+			$extra = $detail ?: $api_message ?: '';
+			$msg   = "Error al conectar con Clientify (HTTP {$http_code})." . ( $extra ? " Detalle: {$extra}" : '' );
+		} else {
+			$msg = 'Respuesta inesperada de Clientify. Intenta de nuevo o contacta con soporte.';
 		}
 
-		// Case 5: HTTP 200 + status = error
-		if ( $http_code === 200 && $api_status === 'error' ) {
-			$msg = $api_message ?: 'Error desconocido';
-			echo json_encode( [
-				'status'  => 'error',
-				'message' => "Error inesperado al conectar: {$msg}. Intenta de nuevo o contacta con soporte.",
-			] );
-			die();
-		}
-
-		// Case 6: HTTP 403 — store limit reached
-		if ( $http_code === 403 ) {
-			$msg = $api_message ?: 'Límite de tiendas alcanzado';
-			echo json_encode( [
-				'status'  => 'error',
-				'message' => "Has alcanzado el límite de tiendas permitidas en tu cuenta de Clientify: {$msg}. Contacta con soporte para ampliar el límite.",
-			] );
-			die();
-		}
-
-		// Case 7: HTTP 406
-		if ( $http_code === 406 ) {
-			$msg = $api_message ?: 'Error desconocido';
-			echo json_encode( [
-				'status'  => 'error',
-				'message' => "Error al procesar la solicitud: {$msg}.",
-			] );
-			die();
-		}
-
-		// Fallback
-		echo json_encode( [
-			'status'  => 'error',
-			'message' => 'Error desconocido al conectar con Clientify. Intenta de nuevo o contacta con soporte.',
-		] );
+		echo json_encode( [ 'status' => 'error', 'message' => $msg . ' Contacta con soporte si el problema persiste.' ] );
 		die();
 	}
 	/**
