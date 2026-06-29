@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if (!defined('ABSPATH'))
     exit; // Exit if accessed directly
 if (!class_exists('Clientify_Api')) {
@@ -15,7 +15,6 @@ if (!class_exists('Clientify_Api')) {
 
         // Configuración de la API
         var $api_url = 'https://api-plus.clientify.com/';
-        // var $api_url = 'https://ecommerce-aly.ngrok.io/';
 
         // Configuración de SSL y HTTP
         var $ssl_verify = true;
@@ -136,6 +135,21 @@ if (!class_exists('Clientify_Api')) {
             }
 
             return json_decode(wp_remote_retrieve_body($response));
+        }
+
+        public function post_contacts_async( $data ) {
+            $args = array(
+                'body'        => json_encode( $data ),
+                'headers'     => array(
+                    'Content-Type'  => 'application/json',
+                    'Authorization' => 'Token ' . $this->api_key,
+                ),
+                'timeout'     => 0.01,
+                'blocking'    => false,
+                'httpversion' => $this->http_version,
+                'sslverify'   => $this->ssl_verify,
+            );
+            wp_remote_post( $this->api_url . 'api/ecommerce/v2/woocommerce_listener', $args );
         }
 
         public function post_order_clientify($data)
