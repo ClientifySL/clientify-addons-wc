@@ -232,8 +232,10 @@ class Clientify_Addons {
 			if(get_option('CLIENTIFY_GDPR') != 0){
 				
 				$this->loader->add_action('woocommerce_register_form', $register_custom_post_type,'agregar_campo_suscripcion');
-				// $this->loader->add_action('woocommerce_before_order_notes', $register_custom_post_type,'agregar_campo_suscripcion_en_checkout');
-				// $this->loader->add_action('woocommerce_review_order_before_submit', $register_custom_post_type,'agregar_checkbox_despues_privacidad');
+				$this->loader->add_action('woocommerce_review_order_before_submit', $register_custom_post_type,'agregar_checkbox_despues_privacidad');
+				$this->loader->add_action('woocommerce_init', $register_custom_post_type, 'register_block_checkout_gdpr_field');
+				$this->loader->add_action('woocommerce_store_api_checkout_update_order_from_request', $register_custom_post_type, 'save_block_checkout_gdpr', 10, 2);
+				$this->loader->add_action('wp_enqueue_scripts', $register_custom_post_type, 'enqueue_block_checkout_gdpr_script');
 
 
 				$this->loader->add_action('woocommerce_created_customer', $register_custom_post_type,'guardar_suscripcion', 5, 1);
@@ -256,6 +258,21 @@ class Clientify_Addons {
 			$this->loader->add_action('wp_footer', $register_custom_post_type, 'clientify_api_script');
 			// $this->loader->add_action('user_register', $register_custom_post_type, 'customer_add', 10, 1 );
 			$this->loader->add_action('woocommerce_created_customer', $register_custom_post_type, 'customer_add', 20, 1 );
+			// External registration adapters — each guarded by its plugin's presence.
+			if ( function_exists( 'wpcf7' ) || class_exists( 'WPCF7' ) ) {
+				// wpcf7_mail_failed fires on local (no mail server); both covered to avoid silent skips.
+				$this->loader->add_action( 'wpcf7_mail_sent',   $register_custom_post_type, 'sync_cf7_registration', 99, 1 );
+				$this->loader->add_action( 'wpcf7_mail_failed', $register_custom_post_type, 'sync_cf7_registration', 99, 1 );
+			}
+			if ( function_exists( 'wpforms' ) ) {
+				$this->loader->add_action( 'wpforms_process_complete', $register_custom_post_type, 'sync_wpforms_registration', 20, 4 );
+			}
+			if ( class_exists( 'GFForms' ) ) {
+				$this->loader->add_action( 'gform_after_submission', $register_custom_post_type, 'sync_gravityforms_registration', 20, 2 );
+			}
+			if ( class_exists( 'UM' ) ) {
+				$this->loader->add_action( 'um_registration_complete', $register_custom_post_type, 'sync_um_registration', 20, 2 );
+			}
 			$this->loader->add_action('woocommerce_order_status_changed', $register_custom_post_type,'sync_hook_order', 10, 3);
 			$this->loader->add_action('woocommerce_update_product', $register_custom_post_type,'product_published', 5, 1);
 			$this->loader->add_action('woocommerce_new_product', $register_custom_post_type,'product_published', 5, 1);

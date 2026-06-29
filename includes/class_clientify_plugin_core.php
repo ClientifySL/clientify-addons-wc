@@ -1,8 +1,9 @@
-<?php
+﻿<?php
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-clientify-api-connect.php';
 require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-clientify-endpoint.php';
 require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-clientify-helper.php';
+require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-clientify-addons-logs.php';
 
 class Clientify_Plugin_Core
 {
@@ -58,6 +59,13 @@ class Clientify_Plugin_Core
 	 * @since    1.1.0
 	 *
 	 */
+	private function send_json( $data ) {
+		while ( ob_get_level() ) ob_end_clean();
+		header( 'Content-Type: application/json' );
+		echo json_encode( $data );
+		die();
+	}
+
 	function connect_clientify()
 	{
 		$key = ( isset( $_POST['apikey'] ) && $_POST['apikey'] !== '' )
@@ -65,8 +73,7 @@ class Clientify_Plugin_Core
 			: get_option( 'CLIENTIFY_API_KEY' );
 
 		if ( empty( $key ) ) {
-			echo json_encode( [ 'status' => 'error', 'message' => 'API Key vacía.' ] );
-			die();
+			$this->send_json( [ 'status' => 'error', 'message' => 'API Key vacia.' ] );
 		}
 
 		$order_process = isset( $_POST['order_process'] ) ? $_POST['order_process'] : '';
@@ -96,11 +103,13 @@ class Clientify_Plugin_Core
 
 		// Case 1: network / WP_Error
 		if ( is_array( $response ) && ! empty( $response['error'] ) ) {
-			echo json_encode( [
-				'status'  => 'error',
-				'message' => 'No se pudo conectar con el servidor de Clientify. Verifica tu conexión a internet e inténtalo de nuevo.',
-			] );
-			die();
+			Clientify_Addons_Logs::insert_log( 'ERROR', sprintf(
+				'Connect Error [network]: code=%s message=%s store_url=%s',
+				$response['code'] ?? 'unknown',
+				$response['message'] ?? 'unknown',
+				$url_base
+			), __FILE__, __LINE__ );
+			$this->send_json( [ 'status' => 'error', 'message' => 'No se pudo conectar con Clientify. Verifica tu conexion a internet.' ] );
 		}
 
 		$http_code   = $response['http_code'];
@@ -109,67 +118,65 @@ class Clientify_Plugin_Core
 		$api_message = isset( $body->data->message ) ? $body->data->message : null;
 		$detail      = isset( $body->detail )        ? strtolower( trim( $body->detail ) ) : '';
 
+		Clientify_Addons_Logs::insert_log( 'INFO', sprintf(
+			'Connect response: http=%d body=%s',
+			$http_code, wp_json_encode( $body )
+		), __FILE__, __LINE__ );
+
 		// Success
 		if ( $http_code === 200 && $api_status === 'success' ) {
 			update_option( 'CLIENTIFY_STATUS', 1 );
-			echo json_encode( [
+			$this->send_json( [
 				'status'   => 'success',
-				'message'  => '¡Conexión exitosa! Tu tienda WooCommerce ha sido conectada a Clientify correctamente.',
+				'message'  => 'Conexion exitosa! Tu tienda WooCommerce ha sido conectada a Clientify.',
 				'open_url' => 'https://new.clientify.com/sales/ecommerce',
 			] );
-			die();
 		}
 
-		// Known api_message errors (HTTP 200 with business-logic failure)
-		$api_message_map = [
-			'other owner'  => 'La URL de tienda ya está conectada a otra cuenta de Clientify. Si crees que es un error, contacta con soporte.',
-			'Invalid body' => 'Los datos enviados no son válidos. Verifica que la URL de la tienda y la clave de API sean correctas.',
-		];
-		if ( $http_code === 200 && $api_status === 'failed' && isset( $api_message_map[ $api_message ] ) ) {
-			echo json_encode( [ 'status' => 'error', 'message' => $api_message_map[ $api_message ] ] );
-			die();
+		// HTTP 200 business-logic failures (status = failed | error)
+		if ( $http_code === 200 && in_array( $api_status, [ 'failed', 'error' ], true ) ) {
+			$api_message_map = [
+				'other owner with this store' => 'La URL de tienda ya esta conectada a otra cuenta de Clientify.',
+				'Invalid body'                => 'Los datos enviados no son validos. Verifica la URL y la API Key.',
+				'Store not found'             => 'Tienda no encontrada en Clientify. Intentalo de nuevo.',
+			];
+			$msg = isset( $api_message_map[ $api_message ] )
+				? $api_message_map[ $api_message ]
+				: ( $api_message ?: 'Error al procesar la solicitud. Intentalo de nuevo.' );
+			Clientify_Addons_Logs::insert_log( 'ERROR', sprintf(
+				'Connect Error [business]: http=%d api_status=%s api_message=%s store_url=%s',
+				$http_code, $api_status, $api_message, $url_base
+			), __FILE__, __LINE__ );
+			$this->send_json( [ 'status' => 'error', 'message' => $msg ] );
 		}
 
-		// Known HTTP error detail strings (language from DRF / Clientify API)
-		$detail_map = [
-			'you do not have permission to perform this action.' => 'Tu API Key no tiene permisos para realizar esta acción en Clientify.',
-			'store limit reached'                               => 'Has alcanzado el límite de tiendas permitidas en tu plan de Clientify.',
-			'ecommerce limit reached'                           => 'Has alcanzado el límite de tiendas permitidas en tu plan de Clientify.',
-			'authentication credentials were not provided.'     => 'No se proporcionaron credenciales de autenticación. Verifica tu API Key.',
-			'invalid token.'                                    => 'API Key inválida. Verifica que la clave sea correcta.',
-		];
-
-		// HTTP code fallback labels
+		// HTTP code fallback (4xx/5xx)
 		$http_code_map = [
-			400 => 'Solicitud incorrecta (400). Verifica los datos enviados.',
-			401 => 'API Key inválida o expirada (401). Verifica que la clave sea correcta.',
-			403 => 'límite de tiendas alcanzado (403).',
+			400 => 'Solicitud incorrecta (400).',
+			401 => 'API Key invalida o expirada (401).',
+			403 => 'Limite de tiendas alcanzado (403).',
 			404 => 'Endpoint no encontrado (404). Contacta con soporte.',
 			406 => 'Formato de solicitud no aceptado (406).',
-			429 => 'Demasiadas solicitudes (429). Espera un momento e inténtalo de nuevo.',
-			500 => 'Error interno del servidor de Clientify (500). Inténtalo más tarde.',
-			502 => 'Servidor de Clientify no disponible (502). Inténtalo más tarde.',
-			503 => 'Servicio de Clientify no disponible (503). Inténtalo más tarde.',
+			429 => 'Demasiadas solicitudes (429). Espera un momento.',
+			500 => 'Error interno del servidor de Clientify (500).',
+			502 => 'Servidor de Clientify no disponible (502).',
+			503 => 'Servicio de Clientify no disponible (503).',
 		];
 
-		if ( $detail && isset( $detail_map[ $detail ] ) ) {
-			$msg = $detail_map[ $detail ];
-		} elseif ( isset( $http_code_map[ $http_code ] ) ) {
-			$msg = $http_code_map[ $http_code ];
-			if ( $detail ) {
-				$msg .= " Detalle: {$body->detail}";
-			} elseif ( $api_message ) {
-				$msg .= " Detalle: {$api_message}";
-			}
+		$detail_msg = $detail ?: $api_message ?: '';
+		if ( isset( $http_code_map[ $http_code ] ) ) {
+			$msg = $http_code_map[ $http_code ] . ( $detail_msg ? ' Detalle: ' . $detail_msg : '' );
 		} elseif ( $http_code >= 400 ) {
-			$extra = $detail ?: $api_message ?: '';
-			$msg   = "Error al conectar con Clientify (HTTP {$http_code})." . ( $extra ? " Detalle: {$extra}" : '' );
+			$msg = 'Error HTTP ' . $http_code . ( $detail_msg ? '. Detalle: ' . $detail_msg : '' );
 		} else {
-			$msg = 'Respuesta inesperada de Clientify. Intenta de nuevo o contacta con soporte.';
+			$msg = 'Respuesta inesperada de Clientify. Intentalo de nuevo.';
 		}
 
-		echo json_encode( [ 'status' => 'error', 'message' => $msg . ' Contacta con soporte si el problema persiste.' ] );
-		die();
+		Clientify_Addons_Logs::insert_log( 'ERROR', sprintf(
+			'Connect Error [api]: http=%d api_status=%s api_message=%s detail=%s store_url=%s',
+			$http_code, $api_status ?? 'null', $api_message ?? 'null', $detail ?: 'none', $url_base
+		), __FILE__, __LINE__ );
+		$this->send_json( [ 'status' => 'error', 'message' => $msg ] );
 	}
 	/**
 	 * Send parameters to gdpr with clientify. Revised.
@@ -218,17 +225,16 @@ class Clientify_Plugin_Core
 		update_option( 'CLIENTIFY_GDPR', 0 );
 
 		if ( $api_status === 'success' ) {
-			echo json_encode( [
-				'status'  => 'success',
-				'message' => 'Desconexión de Clientify realizada correctamente.',
-			] );
+			$this->send_json( [ 'status' => 'success', 'message' => 'Desconexion de Clientify realizada correctamente.' ] );
 		} else {
-			echo json_encode( [
-				'status'  => 'error',
-				'message' => 'Error al desconectar. La sesión local ha sido cerrada de todas formas.',
-			] );
+			$http_code_dc = isset( $response['http_code'] ) ? $response['http_code'] : 'n/a';
+			$detail_dc    = isset( $response['body']->detail ) ? $response['body']->detail : ( isset( $response['message'] ) ? $response['message'] : 'unknown' );
+			Clientify_Addons_Logs::insert_log( 'ERROR', sprintf(
+				'Disconnect Error: http=%s api_status=%s detail=%s store_key=%s',
+				$http_code_dc, $api_status ?? 'null', $detail_dc, $key_uid ?? 'unknown'
+			), __FILE__, __LINE__ );
+			$this->send_json( [ 'status' => 'error', 'message' => 'Error al desconectar. La sesion local ha sido cerrada.' ] );
 		}
-		die();
 	}
 	/**
 	 * Query contact by Id in Wocommerce. Revised.
@@ -285,7 +291,6 @@ class Clientify_Plugin_Core
 			}
 			/*  condition to support other gdprs */
 			$content_comm = get_user_meta($user_id, 'content_comm', true);
-			$data['gdpr_accept'] = $content_comm;
 			if (!empty($content_comm) && ($content_comm === "yes")) {
 				$data['gdpr_accept'] = "accept";
 			}
@@ -366,6 +371,227 @@ class Clientify_Plugin_Core
 		$this->sync_hook_customer( $user_id );
 		//}
 	}
+
+	/**
+	 * Central dispatcher for external-plugin registrations that bypass wp_insert_user.
+	 *
+	 * Accepts a normalized $contact array with the following optional keys:
+	 *   email      (string, required)
+	 *   first_name (string)
+	 *   last_name  (string)
+	 *   phone      (string)  â€” also written to billing_phone user meta
+	 *   city       (string)  â€” also written to billing_city user meta
+	 *   tag        (string)  â€” extra tag appended to the default set (e.g. 'cf7-registration')
+	 *
+	 * @param array $contact Normalized contact data from the adapter.
+	 * @return void
+	 */
+	function sync_external_registration( array $contact ) {
+		$email = isset( $contact['email'] ) ? sanitize_email( $contact['email'] ) : '';
+		if ( empty( $email ) ) {
+			return;
+		}
+
+		$user = get_user_by( 'email', $email );
+		if ( ! $user ) {
+			return;
+		}
+
+		// Skip if woocommerce_created_customer already synced this user in the same request.
+		if ( did_action( 'woocommerce_created_customer' ) ) {
+			return;
+		}
+
+		$endpoint_class = new Clientify_Endpoint();
+		$site_name      = get_option( 'blogname' );
+		$site_name      = empty( $site_name ) ? 'WordPress' : $site_name;
+		$lang           = get_bloginfo( 'language' );
+
+		$tags = array( 'woocommerce', $site_name );
+		if ( ! empty( $contact['tag'] ) ) {
+			$tags[] = sanitize_text_field( $contact['tag'] );
+		}
+
+		$data = array(
+			'status'         => 'customer',
+			'store_url'      => $endpoint_class->get_local_api_url(),
+			'email'          => $email,
+			'contact_source' => $site_name,
+			'custom_fields'  => array(),
+			'tags'           => $tags,
+		);
+
+		if ( ! empty( $contact['first_name'] ) ) {
+			$data['first_name'] = sanitize_text_field( $contact['first_name'] );
+		}
+		if ( ! empty( $contact['last_name'] ) ) {
+			$data['last_name'] = sanitize_text_field( $contact['last_name'] );
+		}
+		if ( ! empty( $lang ) ) {
+			$data['custom_field'] = array(
+				'field' => 'ecommerce_language',
+				'value' => $lang,
+			);
+		}
+		if ( ! empty( $contact['phone'] ) ) {
+			$phone = sanitize_text_field( $contact['phone'] );
+			$data['phones'] = array( array( 'phone' => $phone ) );
+			update_user_meta( $user->ID, 'billing_phone', $phone );
+		}
+		if ( ! empty( $contact['city'] ) ) {
+			$city = sanitize_text_field( $contact['city'] );
+			$data['addresses'] = array( array( 'type' => 1, 'city' => $city ) );
+			update_user_meta( $user->ID, 'billing_city', $city );
+		}
+
+		$api = new Clientify_Api();
+		$api->post_contacts_async( $data );
+	}
+
+	// -------------------------------------------------------------------------
+	// Adapters â€” one per external registration plugin
+	// -------------------------------------------------------------------------
+
+	/**
+	 * Adapter: Contact Form 7 + ZUR (User Registration CF7).
+	 * Hook: wpcf7_mail_sent (priority 99, after ZUR creates the user).
+	 *
+	 * Field map (CF7 field name â†’ contact key):
+	 *   your-email     â†’ email
+	 *   your-name      â†’ first_name
+	 *   your-lastname  â†’ last_name
+	 *   your-telephone â†’ phone
+	 *   poblacion      â†’ city
+	 *
+	 * @param WPCF7_ContactForm $contact_form
+	 */
+	function sync_cf7_registration( $contact_form ) {
+		static $fired = false;
+		if ( $fired ) {
+			return;
+		}
+		$fired = true;
+
+		$submission = WPCF7_Submission::get_instance();
+		if ( ! $submission ) {
+			return;
+		}
+
+		$posted = $submission->get_posted_data();
+
+		// Supports both your-lastname and your-surname (form-dependent).
+		$last_name = '';
+		foreach ( array( 'your-lastname', 'your-surname' ) as $key ) {
+			if ( ! empty( $posted[ $key ] ) ) {
+				$last_name = $posted[ $key ];
+				break;
+			}
+		}
+
+		$this->sync_external_registration( array(
+			'email'      => isset( $posted['your-email'] )     ? $posted['your-email']     : '',
+			'first_name' => isset( $posted['your-name'] )      ? $posted['your-name']      : '',
+			'last_name'  => $last_name,
+			'phone'      => isset( $posted['your-telephone'] ) ? $posted['your-telephone'] : '',
+			'city'       => isset( $posted['poblacion'] )      ? $posted['poblacion']      : '',
+			'tag'        => 'cf7-registration',
+		) );
+	}
+
+	/**
+	 * Adapter: WPForms.
+	 * Hook: wpforms_process_complete (priority 20).
+	 *
+	 * Requires manual field ID mapping in $field_map below.
+	 * Find IDs in WPForms â†’ form editor â†’ field options.
+	 *
+	 * @param array $fields     Processed field data keyed by field ID.
+	 * @param array $entry      Raw submitted entry.
+	 * @param array $form_data  Form configuration.
+	 * @param int   $entry_id   Saved entry ID.
+	 */
+	function sync_wpforms_registration( $fields, $entry, $form_data, $entry_id ) {
+		// Map WPForms field IDs to contact keys. Adjust IDs to match your form.
+		$field_map = array(
+			'email'      => 1,   // field ID for email
+			'first_name' => 2,   // field ID for first name
+			'last_name'  => 3,   // field ID for last name
+			'phone'      => 4,   // field ID for telephone
+			'city'       => 5,   // field ID for city/poblacion
+		);
+
+		$get = function( $key ) use ( $fields, $field_map ) {
+			$id = isset( $field_map[ $key ] ) ? $field_map[ $key ] : null;
+			return ( $id && isset( $fields[ $id ]['value'] ) ) ? $fields[ $id ]['value'] : '';
+		};
+
+		$this->sync_external_registration( array(
+			'email'      => $get( 'email' ),
+			'first_name' => $get( 'first_name' ),
+			'last_name'  => $get( 'last_name' ),
+			'phone'      => $get( 'phone' ),
+			'city'       => $get( 'city' ),
+			'tag'        => 'wpforms-registration',
+		) );
+	}
+
+	/**
+	 * Adapter: Gravity Forms.
+	 * Hook: gform_after_submission (priority 20).
+	 *
+	 * Requires manual field ID mapping in $field_map below.
+	 * Find IDs in Gravity Forms â†’ form editor â†’ field settings.
+	 *
+	 * @param array $entry     Submitted entry data keyed by field ID (string).
+	 * @param array $form      Form configuration.
+	 */
+	function sync_gravityforms_registration( $entry, $form ) {
+		// Map Gravity Forms field IDs (as strings) to contact keys. Adjust to your form.
+		$field_map = array(
+			'email'      => '1',
+			'first_name' => '2',
+			'last_name'  => '3',
+			'phone'      => '4',
+			'city'       => '5',
+		);
+
+		$get = function( $key ) use ( $entry, $field_map ) {
+			$id = isset( $field_map[ $key ] ) ? $field_map[ $key ] : null;
+			return ( $id && isset( $entry[ $id ] ) ) ? $entry[ $id ] : '';
+		};
+
+		$this->sync_external_registration( array(
+			'email'      => $get( 'email' ),
+			'first_name' => $get( 'first_name' ),
+			'last_name'  => $get( 'last_name' ),
+			'phone'      => $get( 'phone' ),
+			'city'       => $get( 'city' ),
+			'tag'        => 'gravityforms-registration',
+		) );
+	}
+
+	/**
+	 * Adapter: Ultimate Member (UM).
+	 * Hook: um_registration_complete (priority 20).
+	 * UM does call wp_insert_user internally, but fires this hook with extra
+	 * custom fields that user_register doesn't carry â€” useful for phone/city.
+	 *
+	 * @param int   $user_id
+	 * @param array $args    Submitted form data.
+	 */
+	function sync_um_registration( $user_id, $args ) {
+		$user = get_userdata( $user_id );
+
+		$this->sync_external_registration( array(
+			'email'      => $user ? $user->user_email : '',
+			'first_name' => isset( $args['first_name'] ) ? $args['first_name'] : '',
+			'last_name'  => isset( $args['last_name'] )  ? $args['last_name']  : '',
+			'phone'      => isset( $args['phone'] )      ? $args['phone']      : '',
+			'city'       => isset( $args['city'] )       ? $args['city']       : '',
+			'tag'        => 'um-registration',
+		) );
+	}
+
 	/**
 	 * Send customer information to the clientify api. Revised.
 	 *
@@ -418,6 +644,23 @@ class Clientify_Plugin_Core
 			if (!empty($content_comm) && ($content_comm === "yes")) {
 				$data['gdpr_accept'] = "accept";
 			}
+			// Read consent from external GDPR plugin (cookie-based) if active
+			$external_plugin  = self::detect_external_gdpr_plugin();
+			$external_consent = self::get_consent_from_external_plugin( $external_plugin );
+			if ( $external_consent !== null ) {
+				$data['gdpr_accept'] = $external_consent;
+			}
+
+			// Read consent from newsletter plugin user meta (MailChimp, Klaviyo, Brevo, etc.)
+			$nl_plugin = self::detect_newsletter_plugin();
+			if ( $nl_plugin && ! empty( $nl_plugin['user_meta'] ) ) {
+				$accept_vals  = ! empty( $nl_plugin['accept_vals'] ) ? $nl_plugin['accept_vals'] : array( '1', 'yes', 'true' );
+				$nl_subscribed = get_user_meta( $user_id, $nl_plugin['user_meta'], true );
+				if ( $nl_subscribed !== '' && $nl_subscribed !== false ) {
+					$data['gdpr_accept'] = in_array( (string) $nl_subscribed, $accept_vals, true ) ? 'accept' : 'revoke';
+				}
+			}
+
 			if ( !empty(get_user_meta($user_id)['first_name'][0]) ) {
 				$data['first_name'] = get_user_meta($user_id)['first_name'][0];
 			}
@@ -529,6 +772,9 @@ class Clientify_Plugin_Core
 	}
 
 	function agregar_campo_suscripcion() {
+		if ( self::detect_external_gdpr_plugin() || self::detect_newsletter_plugin() ) {
+			return;
+		}
 		woocommerce_form_field('suscripcion_newsletter', array(
 			'type' => 'checkbox',
 			'class' => array('form-row-wide'),
@@ -537,7 +783,9 @@ class Clientify_Plugin_Core
 	}
 
 	function agregar_campo_suscripcion_en_checkout($checkout) {
-		
+		if ( self::detect_external_gdpr_plugin() || self::detect_newsletter_plugin() ) {
+			return;
+		}
 		woocommerce_form_field('suscripcion_newsletter', array(
 			'type' => 'checkbox',
 			'class' => array('form-row-wide'),
@@ -556,19 +804,24 @@ class Clientify_Plugin_Core
 	}
 	function guardar_campo_suscripcion_checkout() {
 		$user_id = get_current_user_id();
-		if (isset($_POST['suscripcion_newsletter'])) {
+
+		if ( isset( $_POST['suscripcion_newsletter'] ) ) {
 			$suscripcion = 'accept';
+		} elseif ( isset( $_POST['mailchimp_woocommerce_newsletter'] ) ) {
+			$suscripcion = ( $_POST['mailchimp_woocommerce_newsletter'] == '1' ) ? 'accept' : 'revoke';
 		} else {
 			$suscripcion = 'revoke';
 		}
-		
 
-		if ($user_id) {
-			update_user_meta($user_id, 'suscripcion_newsletter', $suscripcion);
+		if ( $user_id ) {
+			update_user_meta( $user_id, 'suscripcion_newsletter', $suscripcion );
 		}
 	}
 
 	function agregar_checkbox_despues_privacidad() {
+		if ( self::detect_external_gdpr_plugin() || self::detect_newsletter_plugin() ) {
+			return;
+		}
     ?>
     <div class="form-row additional-terms">
         <label class="woocommerce-form__label woocommerce-form__label-for-checkbox checkbox">
@@ -577,6 +830,322 @@ class Clientify_Plugin_Core
     </div>
     <?php
 }
+
+	static function detect_newsletter_plugin() {
+		$active_plugins = (array) get_option( 'active_plugins', array() );
+		if ( is_multisite() ) {
+			$network_plugins = array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) );
+			$active_plugins  = array_merge( $active_plugins, $network_plugins );
+		}
+		$known = array(
+			array(
+				'file'        => 'mailchimp-for-woocommerce/mailchimp-woocommerce.php',
+				'name'        => 'MailChimp for WooCommerce',
+				'author'      => 'Mailchimp',
+				'type'        => 'mailchimp',
+				'post_field'  => 'mailchimp_woocommerce_newsletter',
+				'user_meta'   => 'mailchimp_woocommerce_is_subscribed',
+				'order_meta'  => array( 'mailchimp_woocommerce_is_subscribed', '_mailchimp_woocommerce_is_subscribed', 'mailchimp_newsletter' ),
+				'accept_vals' => array( '1', 'yes', 'true' ),
+				'supported'   => true,
+			),
+			array(
+				'file'        => 'klaviyo-for-woocommerce/klaviyo.php',
+				'name'        => 'Klaviyo',
+				'author'      => 'Klaviyo',
+				'type'        => 'klaviyo',
+				'post_field'  => 'klaviyo_subscribed',
+				'user_meta'   => '_klaviyo_subscribed',
+				'order_meta'  => array( '_klaviyo_subscribed', 'klaviyo_subscribed' ),
+				'accept_vals' => array( '1', 'yes', 'true' ),
+				'supported'   => true,
+			),
+			array(
+				'file'        => 'woocommerce-sendinblue-newsletter-subscription/sendinblue-woocommerce.php',
+				'name'        => 'Brevo (Sendinblue)',
+				'author'      => 'Sendinblue',
+				'type'        => 'brevo',
+				'post_field'  => 'sib_woo_subscription',
+				'user_meta'   => 'sib_woo_subscription',
+				'order_meta'  => array( 'sib_woo_subscription', '_sib_woo_subscription' ),
+				'accept_vals' => array( '1', 'yes', 'true' ),
+				'supported'   => true,
+			),
+			array(
+				'file'        => 'activecampaign-for-woocommerce/activecampaign-for-woocommerce.php',
+				'name'        => 'ActiveCampaign for WooCommerce',
+				'author'      => 'ActiveCampaign',
+				'type'        => 'activecampaign',
+				'post_field'  => 'activecampaign_optin',
+				'user_meta'   => 'activecampaign_optin',
+				'order_meta'  => array( 'activecampaign_optin', '_activecampaign_optin' ),
+				'accept_vals' => array( '1', 'yes', 'true' ),
+				'supported'   => true,
+			),
+			array(
+				'file'        => 'leadin/leadin.php',
+				'name'        => 'HubSpot for WooCommerce',
+				'author'      => 'HubSpot',
+				'type'        => 'hubspot',
+				'post_field'  => 'hs_woo_newsletter',
+				'user_meta'   => 'hs_woo_newsletter',
+				'order_meta'  => array( 'hs_woo_newsletter', '_hs_woo_newsletter' ),
+				'accept_vals' => array( '1', 'yes', 'true' ),
+				'supported'   => true,
+			),
+		);
+		foreach ( $known as $plugin ) {
+			if ( in_array( $plugin['file'], $active_plugins, true ) ) {
+				return $plugin;
+			}
+		}
+		return null;
+	}
+
+	static function get_newsletter_order_consent( $order_id, $plugin ) {
+		global $wpdb;
+
+		if ( empty( $plugin['order_meta'] ) ) {
+			return null;
+		}
+
+		$meta_keys   = $plugin['order_meta'];
+		$accept_vals = ! empty( $plugin['accept_vals'] ) ? $plugin['accept_vals'] : array( '1', 'yes', 'true' );
+
+		$resolve = function( $val ) use ( $accept_vals ) {
+			if ( $val === '' || $val === null || $val === false ) {
+				return null;
+			}
+			return in_array( (string) $val, $accept_vals, true ) ? 'accept' : 'revoke';
+		};
+
+		// 1. WC Order API (transparent for both HPOS and legacy)
+		$order = wc_get_order( $order_id );
+		if ( $order ) {
+			foreach ( $meta_keys as $key ) {
+				$result = $resolve( $order->get_meta( $key ) );
+				if ( $result !== null ) return $result;
+			}
+		}
+
+		// 2. Direct HPOS table query
+		$hpos_table = $wpdb->prefix . 'wc_orders_meta';
+		if ( $wpdb->get_var( "SHOW TABLES LIKE '{$hpos_table}'" ) === $hpos_table ) {
+			foreach ( $meta_keys as $key ) {
+				$val    = $wpdb->get_var( $wpdb->prepare(
+					"SELECT meta_value FROM {$hpos_table} WHERE order_id = %d AND meta_key = %s LIMIT 1",
+					$order_id, $key
+				) );
+				$result = $resolve( $val );
+				if ( $result !== null ) return $result;
+			}
+		}
+
+		// 3. Legacy postmeta
+		foreach ( $meta_keys as $key ) {
+			$result = $resolve( get_post_meta( $order_id, $key, true ) );
+			if ( $result !== null ) return $result;
+		}
+
+		return null;
+	}
+
+	static function detect_external_gdpr_plugin() {
+		$active_plugins = (array) get_option( 'active_plugins', array() );
+		if ( is_multisite() ) {
+			$network_plugins = array_keys( (array) get_site_option( 'active_sitewide_plugins', array() ) );
+			$active_plugins  = array_merge( $active_plugins, $network_plugins );
+		}
+
+		$known = array(
+			array(
+				'file'      => 'gdpr-cookie-compliance/gdpr-cookie-compliance.php',
+				'name'      => 'GDPR Cookie Compliance',
+				'author'    => 'Moove Agency',
+				'type'      => 'moove',
+				'cookie'    => 'moove_gdpr_popup',
+				'supported' => true,
+			),
+			array(
+				'file'      => 'cookieyes-legalmonster/cookieyes.php',
+				'name'      => 'CookieYes',
+				'author'    => 'CookieYes',
+				'type'      => 'cookieyes',
+				'cookie'    => 'cookieyes-consent',
+				'supported' => true,
+			),
+			array(
+				'file'      => 'complianz-gdpr/complianz-gdpr.php',
+				'name'      => 'Complianz',
+				'author'    => 'Really Simple Plugins',
+				'type'      => 'complianz',
+				'cookie'    => 'cmplz_consent',
+				'supported' => true,
+			),
+			array(
+				'file'      => 'cookie-notice/cookie-notice.php',
+				'name'      => 'Cookie Notice & Compliance',
+				'author'    => 'dFactory',
+				'type'      => 'cookie_notice',
+				'cookie'    => 'cookie_notice_accepted',
+				'supported' => true,
+			),
+			array(
+				'file'      => 'gdpr-cookie-consent/gdpr-cookie-consent.php',
+				'name'      => 'Cookie Law Info',
+				'author'    => 'WebToffee',
+				'type'      => 'webtoffee',
+				'cookie'    => 'cookielawinfo-checkbox-marketing',
+				'supported' => true,
+			),
+		);
+
+		foreach ( $known as $plugin ) {
+			if ( in_array( $plugin['file'], $active_plugins, true ) ) {
+				return $plugin;
+			}
+		}
+		return null;
+	}
+
+	static function get_consent_from_external_plugin( $plugin ) {
+		if ( ! $plugin || empty( $plugin['cookie'] ) ) {
+			return null;
+		}
+
+		$cookie_name = $plugin['cookie'];
+		if ( ! isset( $_COOKIE[ $cookie_name ] ) ) {
+			return null;
+		}
+
+		$raw = stripslashes( $_COOKIE[ $cookie_name ] );
+
+		switch ( $plugin['type'] ) {
+			case 'moove':
+				$data = json_decode( $raw, true );
+				if ( ! is_array( $data ) ) return null;
+				$accepted = ( ! empty( $data['thirdparty'] ) && $data['thirdparty'] == 1 )
+				         || ( ! empty( $data['advanced'] )    && $data['advanced']    == 1 )
+				         || ( ! empty( $data['marketing'] )   && $data['marketing']   == 1 );
+				return $accepted ? 'accept' : 'revoke';
+
+			case 'cookieyes':
+				// Format: "consentid:xxx,consent:yes,action:yes,analytics:yes,marketing:yes"
+				$parts = array();
+				foreach ( explode( ',', $raw ) as $pair ) {
+					$kv = explode( ':', $pair, 2 );
+					if ( count( $kv ) === 2 ) {
+						$parts[ trim( $kv[0] ) ] = trim( $kv[1] );
+					}
+				}
+				$accepted = ( isset( $parts['marketing'] ) && $parts['marketing'] === 'yes' )
+				         || ( isset( $parts['consent']   ) && $parts['consent']   === 'yes' );
+				return $accepted ? 'accept' : 'revoke';
+
+			case 'complianz':
+				$data = json_decode( $raw, true );
+				if ( ! is_array( $data ) ) return null;
+				$accepted = ! empty( $data['marketing'] ) && $data['marketing'] == 1;
+				return $accepted ? 'accept' : 'revoke';
+
+			case 'cookie_notice':
+				return ( $raw === 'true' || $raw === '1' ) ? 'accept' : 'revoke';
+
+			case 'webtoffee':
+				return ( $raw === 'yes' ) ? 'accept' : 'revoke';
+		}
+
+		return null;
+	}
+
+	function register_block_checkout_gdpr_field() {
+		if ( self::detect_external_gdpr_plugin() || self::detect_newsletter_plugin() ) {
+			return;
+		}
+		// WC 8.9+: native additional checkout fields (handles UI automatically)
+		if ( function_exists( 'woocommerce_register_additional_checkout_fields' ) ) {
+			woocommerce_register_additional_checkout_fields( array(
+				'id'       => 'clientify-addons/gdpr_consent',
+				'label'    => get_option( 'CLIENTIFY_GDPR_TEXT', __( 'Acepto recibir comunicaciones comerciales GDPR', 'clientify-addons' ) ),
+				'location' => 'order',
+				'type'     => 'checkbox',
+				'required' => false,
+			) );
+			return;
+		}
+
+		// WC 6.5–8.8: register Store API extension schema so JS can send data
+		if ( function_exists( 'woocommerce_store_api_register_endpoint_data' ) ) {
+			woocommerce_store_api_register_endpoint_data( array(
+				'endpoint'        => 'checkout',
+				'namespace'       => 'clientify-addons',
+				'schema_callback' => function () {
+					return array(
+						'gdpr_consent' => array(
+							'description' => __( 'GDPR consent', 'clientify-addons' ),
+							'type'        => array( 'boolean', 'null' ),
+							'context'     => array( 'view', 'edit' ),
+							'readonly'    => false,
+						),
+					);
+				},
+				'schema_type'     => ARRAY_A,
+			) );
+		}
+	}
+
+	function enqueue_block_checkout_gdpr_script() {
+		if ( self::detect_external_gdpr_plugin() || self::detect_newsletter_plugin() ) {
+			return;
+		}
+		if ( ! is_checkout() ) {
+			return;
+		}
+		// Only needed when NOT using the WC 8.9+ native additional fields API
+		if ( function_exists( 'woocommerce_register_additional_checkout_fields' ) ) {
+			return;
+		}
+		wp_enqueue_script(
+			'clientify-gdpr-blocks',
+			plugins_url( '../public/js/clientify-gdpr-blocks.js', __FILE__ ),
+			array( 'wp-data' ),
+			CLIENTIFY_ADDONS_VERSION,
+			true
+		);
+		wp_localize_script( 'clientify-gdpr-blocks', 'clientify_gdpr_params', array(
+			'gdpr_text'       => get_option( 'CLIENTIFY_GDPR_TEXT', __( 'Acepto recibir comunicaciones comerciales GDPR', 'clientify-addons' ) ),
+			'external_plugin' => self::detect_external_gdpr_plugin(),
+		) );
+	}
+
+	function save_block_checkout_gdpr( $order, $request ) {
+		$user_id    = $order->get_customer_id();
+		$gdpr_value = null;
+
+		if ( function_exists( 'woocommerce_get_checkout_field_value_from_request' ) ) {
+			$gdpr_value = woocommerce_get_checkout_field_value_from_request( $request, 'clientify-addons/gdpr_consent' );
+		}
+
+		if ( $gdpr_value === null ) {
+			$extensions = $request->get_param( 'extensions' );
+			if ( isset( $extensions['clientify-addons']['gdpr_consent'] ) ) {
+				$gdpr_value = (bool) $extensions['clientify-addons']['gdpr_consent'];
+			}
+		}
+
+		if ( $gdpr_value === null ) {
+			return;
+		}
+
+		$suscripcion = $gdpr_value ? 'accept' : 'revoke';
+
+		if ( $user_id ) {
+			update_user_meta( $user_id, 'suscripcion_newsletter', $suscripcion );
+		}
+
+		$order->update_meta_data( '_clientify_gdpr_accept', $suscripcion );
+		$order->save();
+	}
 
 // Función para mostrar la sección de gestión de suscripciones
 function mostrar_seccion_gestion_suscripcion() {
@@ -874,25 +1443,25 @@ function agregar_opcion_suscripcion($menu_items) {
 					if (!empty($terms)) {
 						foreach ($terms as $term) {
 							if ($term->parent == 0) {
-								// Categoría principal
+								// CategorÃ­a principal
 								if (!in_array($term->term_id, $categories)) {
 									$categories[] = $term->term_id;
 									$join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->slug;
 								}
 							} else {
-								// Subcategoría
+								// SubcategorÃ­a
 								if (!in_array($term->term_id, $subcategories)) {
 									$subcategories[] = $term->term_id;
 									$parent_id = $term->parent;
 									
-									// Asegurarse de que la categoría principal esté añadida
+									// Asegurarse de que la categorÃ­a principal estÃ© aÃ±adida
 									if (!in_array($parent_id, $categories)) {
 										$parent_term = get_term($parent_id, 'product_cat');
 										$categories[] = $parent_id;
 										$join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->slug;
 									}
 						
-									// Construir la cadena de subcategorías
+									// Construir la cadena de subcategorÃ­as
 									$join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->slug . "|parent_id:" . $parent_id;
 								}
 							}
@@ -941,7 +1510,7 @@ function agregar_opcion_suscripcion($menu_items) {
                         $discount = ($unit_discount_price * 100) / $price;
                     }
 					
-					// Obtener el ID de la variación
+					// Obtener el ID de la variaciÃ³n
 					$variation_id = $order_product->get_variation_id();
 
 					if ($variation_id != 0) {
@@ -963,12 +1532,12 @@ function agregar_opcion_suscripcion($menu_items) {
 							foreach ($partes as $parte) {
 								if (strpos($parte, ":") !== false) {
 									// Si la parte contiene ":", agregarla a las partes relevantes
-									$array_parts[] = trim(explode(":", $parte)[1]); // Tomar solo lo que está después de ":"
+									$array_parts[] = trim(explode(":", $parte)[1]); // Tomar solo lo que estÃ¡ despuÃ©s de ":"
 								}
 							}
 							$attributes_name = implode(", ", $array_parts);
 
-							// Obtener el nombre del producto de la variación
+							// Obtener el nombre del producto de la variaciÃ³n
 							$product_name = $variable_product->get_name();
 
 							if (empty($attributes_name)) {
@@ -1023,9 +1592,21 @@ function agregar_opcion_suscripcion($menu_items) {
 				}
 
 				$contact = 0;
-				
+
 				if ($id_customer){
 					$contact = $this->get_contact($id_customer);
+					if ($contact && get_option('CLIENTIFY_GDPR') == "1") {
+						$suscripcion = get_user_meta($id_customer, 'suscripcion_newsletter', true);
+						if ($suscripcion === "accept" || $suscripcion === "revoke") {
+							$contact['gdpr_accept'] = $suscripcion;
+						}
+					}
+					if ($contact) {
+						$content_comm = get_user_meta($id_customer, 'content_comm', true);
+						if (!empty($content_comm) && $content_comm === "yes") {
+							$contact['gdpr_accept'] = "accept";
+						}
+					}
 				}else{
 					if ( $order->get_billing_first_name() || $order->get_billing_last_name() ) {
 						$customer_phones = array();
@@ -1127,9 +1708,37 @@ function agregar_opcion_suscripcion($menu_items) {
 					}
 				}
 
-				// Email siempre desde facturación de la orden al enviar a Clientify
+				// Email siempre desde facturaciÃ³n de la orden al enviar a Clientify
 				if ( is_array($contact) && !empty($order->get_billing_email()) ) {
 					$contact['email'] = $order->get_billing_email();
+				}
+
+				// GDPR para contactos guest: leer del order meta guardado por block checkout
+				if ( is_array($contact) && !$id_customer ) {
+					$order_gdpr = $order->get_meta( '_clientify_gdpr_accept' );
+					if ( ! empty( $order_gdpr ) ) {
+						$contact['gdpr_accept'] = $order_gdpr;
+					}
+				}
+
+				// Read from external GDPR plugin cookie (applies to both registered and guest)
+				if ( is_array( $contact ) ) {
+					$external_plugin  = self::detect_external_gdpr_plugin();
+					$external_consent = self::get_consent_from_external_plugin( $external_plugin );
+					if ( $external_consent !== null ) {
+						$contact['gdpr_accept'] = $external_consent;
+					}
+				}
+
+				// Read consent from newsletter plugin order meta (MailChimp, Klaviyo, Brevo, etc.)
+				if ( is_array( $contact ) ) {
+					$nl_plugin = self::detect_newsletter_plugin();
+					if ( $nl_plugin ) {
+						$nl_consent = self::get_newsletter_order_consent( $order->get_id(), $nl_plugin );
+						if ( $nl_consent !== null ) {
+							$contact['gdpr_accept'] = $nl_consent;
+						}
+					}
 				}
 
 				$shipping = $order_data['shipping_total'];
@@ -1260,13 +1869,13 @@ function agregar_opcion_suscripcion($menu_items) {
 	 *
 	 */
 	function save_session_id_to_order($order, $data) {
-		// Verificar que WC()->session esté disponible
+		// Verificar que WC()->session estÃ© disponible
 		if (WC()->session) {
 			$wcf_session_id = WC()->session->get( 'wcf_session_id' );
 			
 			// Si existe un session_id, guardarlo en los metadatos de la orden
 			if ($wcf_session_id) {
-				// No necesitamos $order->save() aquí porque la orden se guarda automáticamente después
+				// No necesitamos $order->save() aquÃ­ porque la orden se guarda automÃ¡ticamente despuÃ©s
 				$order->update_meta_data( '_wcf_session_id', $wcf_session_id );
 			}
 		}
@@ -1283,14 +1892,14 @@ function agregar_opcion_suscripcion($menu_items) {
 	 *
 	 */
 	function save_session_id_to_order_blocks($order) {
-		// Verificar que WC()->session esté disponible
+		// Verificar que WC()->session estÃ© disponible
 		if (WC()->session) {
 			$wcf_session_id = WC()->session->get( 'wcf_session_id' );
 			
 			// Si existe un session_id, guardarlo en los metadatos de la orden
 			if ($wcf_session_id) {
 				$order->update_meta_data( '_wcf_session_id', $wcf_session_id );
-				$order->save(); // En Blocks sí necesitamos guardar explícitamente
+				$order->save(); // En Blocks sÃ­ necesitamos guardar explÃ­citamente
 			}
 		}
 	}
@@ -1916,12 +2525,12 @@ function agregar_opcion_suscripcion($menu_items) {
 	function custom_add_country_code_field($fields) {
 		$fields['billing']['billing_country_code'] = array(
 			'type' => 'select',
-			'label' => __('Código del País', 'woocommerce'),
+			'label' => __('CÃ³digo del PaÃ­s', 'woocommerce'),
 			'required' => true,
 			'options' => array(
 				'1' => '+1 (EE. UU.)',
 				'44' => '+44 (Reino Unido)',
-				// Agrega más opciones según sea necesario
+				// Agrega mÃ¡s opciones segÃºn sea necesario
 			),
 			'class' => array('form-row-wide'),
 			'clear' => true,
@@ -1941,7 +2550,7 @@ function agregar_opcion_suscripcion($menu_items) {
 
 	function custom_validate_country_code_field() {
 		if (!isset($_POST['billing_country_code']) || empty($_POST['billing_country_code'])) {
-			wc_add_notice(__('Por favor, seleccione un código de país.'), 'error');
+			wc_add_notice(__('Por favor, seleccione un cÃ³digo de paÃ­s.'), 'error');
 		}
 	}
 

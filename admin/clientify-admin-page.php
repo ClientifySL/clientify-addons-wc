@@ -60,10 +60,44 @@ function clientify_settings_page()
 								<input type="text" id="clientify_gdpr_text" class="floatLabel" name="clientify_gdpr_text" value="<?php echo esc_attr(get_option('CLIENTIFY_GDPR_TEXT')); ?>">
 								<label for="key"><?php echo esc_html__('Texto Personalizado para el GDPR', 'clientify'); ?></label>
 							</div>
+							<?php
+							$external_gdpr = Clientify_Plugin_Core::detect_external_gdpr_plugin();
+							$mc_plugin     = Clientify_Plugin_Core::detect_newsletter_plugin();
+							$any_external  = $external_gdpr || $mc_plugin;
+							?>
 							<div class="controls gdpr_buttom">
-								<input class="input_gdpr" type="checkbox" id="clientify_gdpr_check" name="clientify_gdpr_check"  value='1' <?php checked(get_option('CLIENTIFY_GDPR'), 1); ?> />
-								<label class="label_gdpr" for="clientifyy_gdpr_check"><?php _e('Suscripción GDPR', 'clientify'); ?></label>
+								<input class="input_gdpr" type="checkbox" id="clientify_gdpr_check" name="clientify_gdpr_check" value='1' <?php checked( get_option('CLIENTIFY_GDPR'), 1 ); ?> <?php if ( $any_external ) echo 'disabled'; ?> />
+								<label class="label_gdpr" for="clientify_gdpr_check"><?php _e( 'Suscripción GDPR', 'clientify' ); ?></label>
 							</div>
+							<?php if ( $external_gdpr ) : ?>
+							<div class="clientify-gdpr-external-notice" style="margin-top:12px;padding:12px 16px;background:#f0f7ff;border-left:4px solid #0073aa;border-radius:2px;">
+								<p style="margin:0 0 6px;font-weight:600;color:#0073aa;">
+									<span class="dashicons dashicons-info" style="vertical-align:middle;margin-right:4px;"></span>
+									Plugin GDPR externo detectado: <?php echo esc_html( $external_gdpr['name'] ); ?>
+								</p>
+								<p style="margin:0 0 6px;color:#444;">
+									La opción GDPR propia de Clientify está <strong>desactivada</strong> porque ya usas <strong><?php echo esc_html( $external_gdpr['name'] ); ?></strong> (<?php echo esc_html( $external_gdpr['author'] ); ?>) en tu web.<br>
+									El checkbox de Clientify no se mostrará en el checkout para evitar duplicados.
+								</p>
+								<p style="margin:0;color:#444;">
+									✅ <strong>Clientify está leyendo el consentimiento</strong> desde la cookie <code><?php echo esc_html( $external_gdpr['cookie'] ); ?></code> de <?php echo esc_html( $external_gdpr['name'] ); ?> y lo enviará automáticamente con cada contacto sincronizado.
+								</p>
+							</div>
+							<?php endif; ?>
+							<?php if ( $mc_plugin ) : ?>
+							<div class="clientify-gdpr-external-notice" style="margin-top:12px;padding:12px 16px;background:#fff8e1;border-left:4px solid #f0ad00;border-radius:2px;">
+								<p style="margin:0 0 6px;font-weight:600;color:#a07800;">
+									<span class="dashicons dashicons-email-alt" style="vertical-align:middle;margin-right:4px;"></span>
+									Plugin de newsletter detectado: <?php echo esc_html( $mc_plugin['name'] ); ?>
+								</p>
+								<p style="margin:0 0 6px;color:#444;">
+									Tu web usa <strong><?php echo esc_html( $mc_plugin['name'] ); ?></strong> (<?php echo esc_html( $mc_plugin['author'] ); ?>). El checkbox de consentimiento de Clientify no se mostrará para evitar duplicar el checkbox de <?php echo esc_html( $mc_plugin['name'] ); ?>.
+								</p>
+								<p style="margin:0;color:#444;">
+									✅ <strong>Clientify está leyendo el consentimiento</strong> desde el campo <code><?php echo esc_html( $mc_plugin['post_field'] ); ?></code> de <?php echo esc_html( $mc_plugin['name'] ); ?> y lo sincronizará automáticamente con cada contacto.
+								</p>
+							</div>
+							<?php endif; ?>
 						</div>
 						
 						<!-- hide_div -->

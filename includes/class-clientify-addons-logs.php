@@ -23,33 +23,54 @@ class Clientify_Addons_Logs {
         public static function insert_log($level, $message, $file = '', $error_line = 0) {
             global $wpdb;
             $table_name = $wpdb->prefix . 'clientify_logs';
-    
-            try {
-                $wpdb->insert(
-                    $table_name,
-                    array(
-                        'timestamp' => current_time('mysql'),
-                        'level' => $level,
-                        'message' => $message,
-                        'file' => $file,
-                        'error_line' => $error_line,
-                    )
-                );
-            } catch (Exception $e) {
-                return false;
-                
+
+            // Create table if it doesn't exist yet (e.g. plugin activated before this version)
+            if ( $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) !== $table_name ) {
+                require_once ABSPATH . 'wp-admin/includes/upgrade.php';
+                $charset_collate = $wpdb->get_charset_collate();
+                dbDelta( "CREATE TABLE IF NOT EXISTS $table_name (
+                    id mediumint(9) NOT NULL AUTO_INCREMENT,
+                    timestamp datetime DEFAULT '0000-00-00 00:00:00' NOT NULL,
+                    level varchar(50) NOT NULL,
+                    message text NOT NULL,
+                    file varchar(255),
+                    error_line mediumint(9),
+                    PRIMARY KEY (id)
+                ) $charset_collate;" );
             }
+
+            $result = $wpdb->insert(
+                $table_name,
+                array(
+                    'timestamp'  => current_time('mysql'),
+                    'level'      => $level,
+                    'message'    => $message,
+                    'file'       => $file,
+                    'error_line' => (int) $error_line,
+                ),
+                array( '%s', '%s', '%s', '%s', '%d' )
+            );
+
+            return $result;
         }
     
         /**
          * Handle PHP errors.
          */
+        private static $handling_error = false;
+
         public static function handle_errors_php($errno, $errstr, $errfile, $errline) {
             if (!self::is_plugin_file($errfile)) {
                 return false; // Ignorar si no es de nuestro plugin
             }
+            if ( self::$handling_error ) {
+                return true; // Evitar recursión infinita
+            }
+            self::$handling_error = true;
             $level = self::get_error_level($errno);
             self::insert_log($level, $errstr, $errfile, $errline);
+            self::$handling_error = false;
+            return true; // Indicar a PHP que el error fue manejado — no imprimir al output
         }
         /**
          * Handling uncaught exceptions.
