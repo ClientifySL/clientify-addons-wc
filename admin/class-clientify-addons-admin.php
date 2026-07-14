@@ -60,24 +60,13 @@ class Clientify_Addons_Admin {
 	 * @since    1.1.0
 	 */
 	public function enqueue_styles() {
+		$screen = get_current_screen();
+		if ( ! $screen || $screen->id !== 'toplevel_page_clientify-addons' ) {
+			return;
+		}
 
-		/**
-		 * This function is provided for demonstration purposes only.
-		 *
-		 * An instance of this class should be passed to the run() function
-		 * defined in Clientify_Addons_Loader as all of the hooks are defined
-		 * in that particular class.
-		 *
-		 * The Clientify_Addons_Loader will then create the relationship
-		 * between the defined hooks and the functions defined in this
-		 * class.
-		 */
 		wp_enqueue_style( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'css/clientify-addons-admin.css', array(), $this->version, 'all' );
-		// wp_enqueue_style( 'prefix_initial', 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.7/build/css/intlTelInput.css', array(), $this->version, 'all' );
 		wp_enqueue_style( 'select2', plugin_dir_url( __FILE__ ).'css/select2.min.css' , array(), $this->version, 'all');
-
-
-
 	}
 
 	/**
@@ -86,7 +75,11 @@ class Clientify_Addons_Admin {
 	 * @since    1.1.0
 	 */
 	public function enqueue_scripts() {
-		error_log('✅ enqueue_scripts() se está ejecutando');
+		$screen = get_current_screen();
+		if ( ! $screen || $screen->id !== 'toplevel_page_clientify-addons' ) {
+			return;
+		}
+
 		$base_path = plugin_dir_path( __FILE__ ) . 'js/clientify-addons-admin.js';
 
 		// Script principal del plugin

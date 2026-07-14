@@ -223,9 +223,7 @@ class Clientify_Addons {
 				// Table exists, activate logs
 				$plugin_logs = new Clientify_Addons_Logs();
 				set_error_handler(array($plugin_logs, 'handle_errors_php'));
-				set_exception_handler(array($plugin_logs, 'handle_exceptions'));
 				register_shutdown_function(array($plugin_logs, 'handling_fatal_errors'));
-				// add_filter('wp_die_handler', array($plugin_logs, 'handle_errors_wp'));
 			}
 
 			// add gdpr
@@ -258,12 +256,9 @@ class Clientify_Addons {
 			$this->loader->add_action('wp_footer', $register_custom_post_type, 'clientify_api_script');
 			// $this->loader->add_action('user_register', $register_custom_post_type, 'customer_add', 10, 1 );
 			$this->loader->add_action('woocommerce_created_customer', $register_custom_post_type, 'customer_add', 20, 1 );
-			// External registration adapters — each guarded by its plugin's presence.
-			if ( function_exists( 'wpcf7' ) || class_exists( 'WPCF7' ) ) {
-				// wpcf7_mail_failed fires on local (no mail server); both covered to avoid silent skips.
-				$this->loader->add_action( 'wpcf7_mail_sent',   $register_custom_post_type, 'sync_cf7_registration', 99, 1 );
-				$this->loader->add_action( 'wpcf7_mail_failed', $register_custom_post_type, 'sync_cf7_registration', 99, 1 );
-			}
+			// CF7: sync via JS event (wpcf7mailsent) → AJAX endpoint, no PHP hooks to avoid blocking CF7 response.
+			$this->loader->add_action( 'wp_ajax_nopriv_clientify_cf7_contact_sync', $register_custom_post_type, 'handle_cf7_contact_sync' );
+			$this->loader->add_action( 'wp_ajax_clientify_cf7_contact_sync',        $register_custom_post_type, 'handle_cf7_contact_sync' );
 			if ( function_exists( 'wpforms' ) ) {
 				$this->loader->add_action( 'wpforms_process_complete', $register_custom_post_type, 'sync_wpforms_registration', 20, 4 );
 			}
@@ -292,8 +287,7 @@ class Clientify_Addons {
 		$this->loader->add_action('wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 		//$this->loader->add_action('wp_enqueue_scripts', $register_custom_post_type, 'add_clientify_script' );
 
-		$this->loader->add_action('rest_api_init', $clientify_wp_api, 'clientify_set_endpoints');
-		
+		// rest_api_init already registered in create_endpoint() — do not register again here
 		$this->loader->add_action('admin_init', $register_custom_post_type, 'clientify_settings');
 		//$this->loader->add_action( 'init', $register_custom_post_type,'clientify_action_init', 10, 1 );
 	

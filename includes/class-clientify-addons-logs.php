@@ -60,6 +60,9 @@ class Clientify_Addons_Logs {
         private static $handling_error = false;
 
         public static function handle_errors_php($errno, $errstr, $errfile, $errline) {
+            if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+                return false; // Never interfere with REST API responses
+            }
             if (!self::is_plugin_file($errfile)) {
                 return false; // Ignorar si no es de nuestro plugin
             }
@@ -87,6 +90,9 @@ class Clientify_Addons_Logs {
          * Handle PHP fatal errors..
          */
         public static function handling_fatal_errors() {
+            if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+                return;
+            }
             $error = error_get_last();
             if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
                 if (!self::is_plugin_file($error['file'])) {

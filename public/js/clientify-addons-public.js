@@ -211,7 +211,28 @@
 
 	wcf_cart_abandonment.init();
 
+	// CF7: after successful submission send contact to Clientify (fire-and-forget, no PHP blocking)
+	document.addEventListener( 'wpcf7mailsent', function ( event ) {
+		var inputs  = event.detail && event.detail.inputs ? event.detail.inputs : [];
+		var payload = {
+			action : 'clientify_cf7_contact_sync',
+			nonce  : clientify_wcf_ca_vars._cf7_nonce,
+		};
+		inputs.forEach( function ( field ) { payload[ field.name ] = field.value; } );
 
+		var body = Object.keys( payload ).map( function ( k ) {
+			return encodeURIComponent( k ) + '=' + encodeURIComponent( payload[ k ] );
+		} ).join( '&' );
+
+		if ( typeof fetch !== 'undefined' ) {
+			fetch( clientify_wcf_ca_vars.ajaxurl, {
+				method   : 'POST',
+				headers  : { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body     : body,
+				keepalive: true,
+			} );
+		}
+	}, false );
 
 	// En tu archivo JavaScript (tu-script-ajax.js)
 jQuery(document).ready(function ($) {

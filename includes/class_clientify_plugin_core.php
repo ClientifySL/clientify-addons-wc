@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 if ( ! defined( 'ABSPATH' ) ) exit; // Exit if accessed directly
 require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-clientify-api-connect.php';
 require_once plugin_dir_path(dirname(__FILE__)) . 'includes/class-clientify-endpoint.php';
@@ -465,37 +465,72 @@ class Clientify_Plugin_Core
 	 *
 	 * @param WPCF7_ContactForm $contact_form
 	 */
-	function sync_cf7_registration( $contact_form ) {
-		static $fired = false;
-		if ( $fired ) {
-			return;
+	// Deprecated: CF7 sync now handled via JS (wpcf7mailsent) → handle_cf7_contact_sync AJAX.
+	function sync_cf7_registration( $contact_form ) {}
+
+	/**
+	 * AJAX handler: receives CF7 form data from JS (wpcf7mailsent event) and sends to Clientify.
+	 * Runs in a separate browser request AFTER CF7 has already responded — never blocks CF7.
+	 */
+	function handle_cf7_contact_sync() {
+		check_ajax_referer( 'clientify_cf7_contact_sync', 'nonce' );
+
+		$email = isset( $_POST['your-email'] ) ? sanitize_email( $_POST['your-email'] ) : '';
+		if ( empty( $email ) ) {
+			wp_die();
 		}
-		$fired = true;
 
-		$submission = WPCF7_Submission::get_instance();
-		if ( ! $submission ) {
-			return;
-		}
-
-		$posted = $submission->get_posted_data();
-
-		// Supports both your-lastname and your-surname (form-dependent).
 		$last_name = '';
 		foreach ( array( 'your-lastname', 'your-surname' ) as $key ) {
-			if ( ! empty( $posted[ $key ] ) ) {
-				$last_name = $posted[ $key ];
+			if ( ! empty( $_POST[ $key ] ) ) {
+				$last_name = sanitize_text_field( $_POST[ $key ] );
 				break;
 			}
 		}
 
-		$this->sync_external_registration( array(
-			'email'      => isset( $posted['your-email'] )     ? $posted['your-email']     : '',
-			'first_name' => isset( $posted['your-name'] )      ? $posted['your-name']      : '',
-			'last_name'  => $last_name,
-			'phone'      => isset( $posted['your-telephone'] ) ? $posted['your-telephone'] : '',
-			'city'       => isset( $posted['poblacion'] )      ? $posted['poblacion']      : '',
-			'tag'        => 'cf7-registration',
-		) );
+		$endpoint  = new Clientify_Endpoint();
+		$site_name = get_option( 'blogname' ) ?: 'WordPress';
+		$lang      = get_bloginfo( 'language' );
+
+		$data = array(
+			'status'         => 'customer',
+			'store_url'      => $endpoint->get_local_api_url(),
+			'email'          => $email,
+			'contact_source' => $site_name,
+			'tags'           => array( 'woocommerce', $site_name, 'cf7-contact' ),
+			'custom_fields'  => array(),
+		);
+
+		if ( ! empty( $_POST['your-name'] ) ) {
+			$data['first_name'] = sanitize_text_field( $_POST['your-name'] );
+		}
+		if ( ! empty( $last_name ) ) {
+			$data['last_name'] = $last_name;
+		}
+		if ( ! empty( $_POST['your-telephone'] ) ) {
+			$data['phones'] = array( array( 'phone' => sanitize_text_field( $_POST['your-telephone'] ) ) );
+		}
+		if ( ! empty( $_POST['poblacion'] ) ) {
+			$data['addresses'] = array( array( 'type' => 1, 'city' => sanitize_text_field( $_POST['poblacion'] ) ) );
+		}
+		if ( ! empty( $lang ) ) {
+			$data['custom_field'] = array( 'field' => 'ecommerce_language', 'value' => $lang );
+		}
+
+		// GDPR: check CF7 acceptance fields (acceptance-* pattern or named 'legal')
+		$gdpr_accept = 'revoke';
+		foreach ( $_POST as $key => $value ) {
+			if ( ( strpos( $key, 'acceptance-' ) === 0 || $key === 'legal' ) && ! empty( $value ) ) {
+				$gdpr_accept = 'accept';
+				break;
+			}
+		}
+		$data['gdpr_accept'] = $gdpr_accept;
+
+		$api = new Clientify_Api();
+		$api->post_contacts_async( $data );
+
+		wp_die();
 	}
 
 	/**
