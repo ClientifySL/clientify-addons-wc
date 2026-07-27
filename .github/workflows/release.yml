@@ -1,0 +1,26 @@
+name: Build & attach plugin zip on release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build zip with correct folder name
+        run: |
+          mkdir -p /tmp/clientify-addons-wc
+          rsync -av --exclude='.git' --exclude='.github' . /tmp/clientify-addons-wc/
+          cd /tmp
+          zip -r clientify-addons-wc.zip clientify-addons-wc/
+
+      - name: Upload zip as release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: /tmp/clientify-addons-wc.zip

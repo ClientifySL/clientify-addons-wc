@@ -37,6 +37,9 @@ if ( ! defined( 'WPINC' ) ) {
  */
 define( 'CLIENTIFY_ADDONS_VERSION', '1.1.3' );
 
+define( 'CLIENTIFY_GITHUB_USER', '' );
+define( 'CLIENTIFY_GITHUB_REPO', '' );
+
 /**
  * The code that runs during plugin activation.
  * This action is documented in includes/class-clientify-addons-activator.php
@@ -63,6 +66,7 @@ register_deactivation_hook( __FILE__, 'clientify_deactivate_addons' );
  * admin-specific hooks, and public-facing site hooks.
  */
 require plugin_dir_path( __FILE__ ) . 'includes/class-clientify-addons.php';
+require plugin_dir_path( __FILE__ ) . 'includes/class-clientify-updater.php';
 
 /**
  * Begins execution of the plugin.
@@ -80,3 +84,10 @@ function clientify_run_addons() {
 
 }
 add_action( 'plugins_loaded', 'clientify_run_addons' );
+
+( new Clientify_Updater(
+	__FILE__,
+	CLIENTIFY_ADDONS_VERSION,
+	CLIENTIFY_GITHUB_USER,
+	CLIENTIFY_GITHUB_REPO
+) )->init();
