@@ -1189,8 +1189,10 @@ class Clientify_Endpoint {
 
         global $wpdb;
         $all = array();
-        $created_from = date("Y-m-d", strtotime($params->get_param('created_from')));
-        $created_at_end = empty($params->get_param('created_at_end')) ? date("Y-m-d") : $params->get_param('created_at_end');
+        $created_from_raw = $params->get_param('created_from');
+        $created_from = empty($created_from_raw) ? date("Y-m-d") : date("Y-m-d", strtotime($created_from_raw));
+        $created_at_end_raw = $params->get_param('created_at_end');
+        $created_at_end = empty($created_at_end_raw) ? date("Y-m-d") : $created_at_end_raw;
 
         $per_page = empty($params->get_param('per_page')) ? 0 : $params->get_param('per_page');
         $paged = empty($params->get_param('page')) ? 1 : $params->get_param('page');
@@ -1479,8 +1481,10 @@ class Clientify_Endpoint {
         $api = new Clientify_Api;
         $all = array();
         $result_sync = array();
-        $created_from = date("Y-m-d", strtotime($params->get_param('created_from')));
-        $created_end = empty($params->get_param('created_at_end')) ? date("Y-m-d") : $params->get_param('created_at_end');
+        $created_from_raw = $params->get_param('created_from');
+        $created_from = empty($created_from_raw) ? date("Y-m-d") : date("Y-m-d", strtotime($created_from_raw));
+        $created_end_raw = $params->get_param('created_at_end');
+        $created_end = empty($created_end_raw) ? date("Y-m-d") : $created_end_raw;
 
         $per_page = empty($params->get_param('per_page')) ? 0 : $params->get_param('per_page');
         $paged = empty($params->get_param('page')) ? 1 : $params->get_param('page');
