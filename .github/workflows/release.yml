@@ -1,0 +1,65 @@
+# Publica una GitHub Release con el ZIP del plugin al pushear un tag `vX.Y.Z`.
+#
+# El plugin (en el WordPress del cliente) se auto-actualiza consultando la API
+# pública de releases de GitHub: necesita repo PÚBLICO y una release con el ZIP.
+# El ZIP lleva la carpeta raíz `clientify-addons/` (= Text Domain / slug del
+# plugin, con `clientify-addons/clientify-addons.php` como fichero principal),
+# que es lo que WordPress espera para instalar/actualizar sin cambiar el slug.
+#
+# Estándar (repo público): runs-on de GitHub (NUNCA self-hosted) y SOLO el
+# GITHUB_TOKEN automático.
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Versión desde el tag
+        id: v
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Inyectar la versión en el plugin
+        run: |
+          set -euo pipefail
+          V="${{ steps.v.outputs.version }}"
+          # Cabecera del plugin:  * Version:           X.Y.Z
+          sed -i -E "s#^([[:space:]]*\*[[:space:]]*Version:[[:space:]]*).*#\1${V}#" clientify-addons.php
+          # define( 'CLIENTIFY_ADDONS_VERSION', 'X.Y.Z' );
+          sed -i -E "s#(define\([[:space:]]*'CLIENTIFY_ADDONS_VERSION',[[:space:]]*')[^']*(')#\1${V}\2#" clientify-addons.php
+          # README.txt: solo el PRIMER 'Stable tag:' (el del header, no la doc)
+          sed -i -E "0,/^Stable tag:.*/s//Stable tag: ${V}/" README.txt
+          echo "  header  -> $(grep -m1 -E '^\s*\*\s*Version:' clientify-addons.php)"
+          echo "  define  -> $(grep -oE "CLIENTIFY_ADDONS_VERSION', '[^']*'" clientify-addons.php)"
+          echo "  readme  -> $(grep -m1 -E '^Stable tag:' README.txt)"
+
+      - name: Empaquetar el ZIP (carpeta raíz clientify-addons/)
+        run: |
+          set -euo pipefail
+          V="${{ steps.v.outputs.version }}"
+          mkdir -p build/clientify-addons
+          rsync -a --exclude='.git' --exclude='.github' --exclude='build' \
+                --exclude='README.md' --exclude='.gitignore' ./ build/clientify-addons/
+          cd build
+          zip -rq "clientify-addons-v${V}.zip" clientify-addons
+          unzip -l "clientify-addons-v${V}.zip" | grep 'clientify-addons/' | head -5
+
+      - name: Publicar la Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          V="${{ steps.v.outputs.version }}"
+          gh release create "${GITHUB_REF_NAME}" \
+            "build/clientify-addons-v${V}.zip" \
+            --title "v${V}" \
+            --generate-notes
