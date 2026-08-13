@@ -37,8 +37,8 @@ if ( ! defined( 'WPINC' ) ) {
  */
 define( 'CLIENTIFY_ADDONS_VERSION', '1.1.3' );
 
-define( 'CLIENTIFY_GITHUB_USER', '' );
-define( 'CLIENTIFY_GITHUB_REPO', '' );
+define( 'CLIENTIFY_GITHUB_USER', 'ClientifySL' );
+define( 'CLIENTIFY_GITHUB_REPO', 'clientify-addons-wc' );
 
 /**
  * The code that runs during plugin activation.
