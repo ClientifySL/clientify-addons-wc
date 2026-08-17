@@ -2,9 +2,11 @@
 #
 # El plugin (en el WordPress del cliente) se auto-actualiza consultando la API
 # pública de releases de GitHub: necesita repo PÚBLICO y una release con el ZIP.
-# El ZIP lleva la carpeta raíz `clientify-addons/` (= Text Domain / slug del
-# plugin, con `clientify-addons/clientify-addons.php` como fichero principal),
-# que es lo que WordPress espera para instalar/actualizar sin cambiar el slug.
+# El ZIP lleva la carpeta raíz `clientify-addons-wc/` — DEBE coincidir con la
+# carpeta donde está INSTALADO el plugin (plugin_basename =
+# clientify-addons-wc/clientify-addons.php). El updater (class-clientify-updater.php)
+# NO engancha upgrader_source_selection, así que WordPress usa la carpeta del ZIP
+# TAL CUAL: si no coincide, el update rompe/duplica el plugin.
 #
 # Estándar (repo público): runs-on de GitHub (NUNCA self-hosted) y SOLO el
 # GITHUB_TOKEN automático.
@@ -42,16 +44,16 @@ jobs:
           echo "  define  -> $(grep -oE "CLIENTIFY_ADDONS_VERSION', '[^']*'" clientify-addons.php)"
           echo "  readme  -> $(grep -m1 -E '^Stable tag:' README.txt)"
 
-      - name: Empaquetar el ZIP (carpeta raíz clientify-addons/)
+      - name: Empaquetar el ZIP (carpeta raíz clientify-addons-wc/)
         run: |
           set -euo pipefail
           V="${{ steps.v.outputs.version }}"
-          mkdir -p build/clientify-addons
+          mkdir -p build/clientify-addons-wc
           rsync -a --exclude='.git' --exclude='.github' --exclude='build' \
-                --exclude='README.md' --exclude='.gitignore' ./ build/clientify-addons/
+                --exclude='README.md' --exclude='.gitignore' ./ build/clientify-addons-wc/
           cd build
-          zip -rq "clientify-addons-v${V}.zip" clientify-addons
-          unzip -l "clientify-addons-v${V}.zip" | grep 'clientify-addons/' | head -5
+          zip -rq "clientify-addons-v${V}.zip" clientify-addons-wc
+          unzip -l "clientify-addons-v${V}.zip" | grep 'clientify-addons-wc/' | head -5
 
       - name: Publicar la Release
         env:
