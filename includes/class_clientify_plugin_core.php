@@ -2557,49 +2557,4 @@ function agregar_opcion_suscripcion($menu_items) {
 		return $checkout_details;
 	}
 
-	function custom_add_country_code_field($fields) {
-		$fields['billing']['billing_country_code'] = array(
-			'type' => 'select',
-			'label' => __('CÃ³digo del PaÃ­s', 'woocommerce'),
-			'required' => true,
-			'options' => array(
-				'1' => '+1 (EE. UU.)',
-				'44' => '+44 (Reino Unido)',
-				// Agrega mÃ¡s opciones segÃºn sea necesario
-			),
-			'class' => array('form-row-wide'),
-			'clear' => true,
-		);
-	
-		return $fields;
-	}
-
-	function custom_display_country_code_field($checkout) {
-		$fields = $checkout->get_checkout_fields('billing');
-		$country_code_field = $fields['billing_country_code'];
-	
-		echo '<div class="form-row form-row-wide">';
-		woocommerce_form_field('billing_country_code', $country_code_field, $checkout->get_value('billing_country_code'));
-		echo '</div>';
-	}
-
-	function custom_validate_country_code_field() {
-		if (!isset($_POST['billing_country_code']) || empty($_POST['billing_country_code'])) {
-			wc_add_notice(__('Por favor, seleccione un cÃ³digo de paÃ­s.'), 'error');
-		}
-	}
-
-	function custom_add_country_code_to_phone_number($posted_data) {
-		if (isset($posted_data['billing_country_code'])) {
-			$country_code = $posted_data['billing_country_code'];
-			$phone_number = isset($posted_data['billing_phone']) ? $posted_data['billing_phone'] : '';
-	
-			if (!empty($phone_number)) {
-				$posted_data['billing_phone'] = '+' . $country_code . ' ' . $phone_number;
-			}
-		}
-	
-		return $posted_data;
-	}
-
 }
