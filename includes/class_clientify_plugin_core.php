@@ -322,7 +322,8 @@ class Clientify_Plugin_Core
 
 				$street = $customer_meta['billing_address_1'][0] . (!empty($customer_meta['billing_address_2'][0]) ? ', ' . $customer_meta['billing_address_2'][0] : '');
 				$city = $customer_meta['billing_city'][0];
-				$country = WC()->countries->countries[$customer_meta['billing_country'][0]];
+				$billing_country_code = !empty( $customer_meta['billing_country'][0] ) ? $customer_meta['billing_country'][0] : '';
+				$country = !empty( $billing_country_code ) && isset( WC()->countries->countries[ $billing_country_code ] ) ? WC()->countries->countries[ $billing_country_code ] : '';
 				$postal_code = $customer_meta['billing_postcode'][0];
 				$customer_address = array('type' => 1);
 
@@ -760,7 +761,8 @@ class Clientify_Plugin_Core
 			}elseif ($woocommerce->customer != null) {
 				$street = $woocommerce->customer->get_billing_address() . (!empty($woocommerce->customer->get_billing_address_2()) ? ', ' . $woocommerce->customer->get_billing_address_2() : '');
 				$city = $woocommerce->customer->get_billing_city();
-				$country = WC()->countries->countries[$woocommerce->customer->get_billing_country()];
+				$billing_country_code = $woocommerce->customer->get_billing_country();
+				$country = !empty( $billing_country_code ) && isset( WC()->countries->countries[ $billing_country_code ] ) ? WC()->countries->countries[ $billing_country_code ] : '';
 				$postal_code = $woocommerce->customer->get_billing_postcode();
 				$customer_address = array('type' => 1);
 				if ( $street ) {
