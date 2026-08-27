@@ -223,17 +223,17 @@ class Clientify_Addons {
 				// Table exists, activate logs
 				$plugin_logs = new Clientify_Addons_Logs();
 				set_error_handler(array($plugin_logs, 'handle_errors_php'));
-				set_exception_handler(array($plugin_logs, 'handle_exceptions'));
 				register_shutdown_function(array($plugin_logs, 'handling_fatal_errors'));
-				add_filter('wp_die_handler', array($plugin_logs, 'handle_errors_wp'));
 			}
 
 			// add gdpr
 			if(get_option('CLIENTIFY_GDPR') != 0){
 				
 				$this->loader->add_action('woocommerce_register_form', $register_custom_post_type,'agregar_campo_suscripcion');
-				// $this->loader->add_action('woocommerce_before_order_notes', $register_custom_post_type,'agregar_campo_suscripcion_en_checkout');
-				// $this->loader->add_action('woocommerce_review_order_before_submit', $register_custom_post_type,'agregar_checkbox_despues_privacidad');
+				$this->loader->add_action('woocommerce_review_order_before_submit', $register_custom_post_type,'agregar_checkbox_despues_privacidad');
+				$this->loader->add_action('woocommerce_init', $register_custom_post_type, 'register_block_checkout_gdpr_field');
+				$this->loader->add_action('woocommerce_store_api_checkout_update_order_from_request', $register_custom_post_type, 'save_block_checkout_gdpr', 10, 2);
+				$this->loader->add_action('wp_enqueue_scripts', $register_custom_post_type, 'enqueue_block_checkout_gdpr_script');
 
 
 				$this->loader->add_action('woocommerce_created_customer', $register_custom_post_type,'guardar_suscripcion', 5, 1);
@@ -256,15 +256,26 @@ class Clientify_Addons {
 			$this->loader->add_action('wp_footer', $register_custom_post_type, 'clientify_api_script');
 			// $this->loader->add_action('user_register', $register_custom_post_type, 'customer_add', 10, 1 );
 			$this->loader->add_action('woocommerce_created_customer', $register_custom_post_type, 'customer_add', 20, 1 );
+			// CF7: sync via JS event (wpcf7mailsent) → AJAX endpoint, no PHP hooks to avoid blocking CF7 response.
+			$this->loader->add_action( 'wp_ajax_nopriv_clientify_cf7_contact_sync', $register_custom_post_type, 'handle_cf7_contact_sync' );
+			$this->loader->add_action( 'wp_ajax_clientify_cf7_contact_sync',        $register_custom_post_type, 'handle_cf7_contact_sync' );
+			if ( function_exists( 'wpforms' ) ) {
+				$this->loader->add_action( 'wpforms_process_complete', $register_custom_post_type, 'sync_wpforms_registration', 20, 4 );
+			}
+			if ( class_exists( 'GFForms' ) ) {
+				$this->loader->add_action( 'gform_after_submission', $register_custom_post_type, 'sync_gravityforms_registration', 20, 2 );
+			}
+			if ( class_exists( 'UM' ) ) {
+				$this->loader->add_action( 'um_registration_complete', $register_custom_post_type, 'sync_um_registration', 20, 2 );
+			}
 			$this->loader->add_action('woocommerce_order_status_changed', $register_custom_post_type,'sync_hook_order', 10, 3);
 			$this->loader->add_action('woocommerce_update_product', $register_custom_post_type,'product_published', 5, 1);
 			$this->loader->add_action('woocommerce_new_product', $register_custom_post_type,'product_published', 5, 1);
-			/* Abandoned Cart Process*/	
+
 			$this->loader->add_action('woocommerce_add_to_cart', $register_custom_post_type,'clientify_save_add_to_cart', 10, 2);
 			$this->loader->add_action('woocommerce_update_cart_action_cart_updated',$register_custom_post_type, 'clientify_cart_updated', 20, 1);
 			$this->loader->add_action('woocommerce_remove_cart_item', $register_custom_post_type, 'delete_item_cart');
 			$this->loader->add_action('woocommerce_checkout_create_order', $register_custom_post_type, 'save_session_id_to_order', 10, 2);
-			$this->loader->add_action('woocommerce_checkout_order_created', $register_custom_post_type, 'sync_billing_phone_to_user_meta', 20, 1);
 			$this->loader->add_action('woocommerce_store_api_checkout_order_processed', $register_custom_post_type, 'save_session_id_to_order_blocks', 10, 1);
 			$this->loader->add_action('woocommerce_thankyou', $register_custom_post_type,'delete_cart' );
 			$this->loader->add_action('woocommerce_payment_complete', $register_custom_post_type,'delete_cart' );
@@ -276,8 +287,7 @@ class Clientify_Addons {
 		$this->loader->add_action('wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 		//$this->loader->add_action('wp_enqueue_scripts', $register_custom_post_type, 'add_clientify_script' );
 
-		$this->loader->add_action('rest_api_init', $clientify_wp_api, 'clientify_set_endpoints');
-		
+		// rest_api_init already registered in create_endpoint() — do not register again here
 		$this->loader->add_action('admin_init', $register_custom_post_type, 'clientify_settings');
 		//$this->loader->add_action( 'init', $register_custom_post_type,'clientify_action_init', 10, 1 );
 	

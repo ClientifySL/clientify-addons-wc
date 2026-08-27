@@ -9,14 +9,14 @@
  * that starts the plugin.
  *
  * @link              Clientify SL
- * @since             1.1.0
+ * @since             1.1.3
  * @package           Clientify-Ecommerce
  *
  * @wordpress-plugin
  * Plugin Name:       Clientify-Ecommerce
  * Plugin URI:        https://clientify.com/
  * Description:       Conecta woocommerce con Clientify para automatizar el marketing de tu tienda online.
- * Version:           1.1.0
+ * Version:           1.1.3
  * Author:            Clientify SL
  * Author URI:        Clientify SL
  * License:           GPL-2.0+
@@ -35,7 +35,10 @@ if ( ! defined( 'WPINC' ) ) {
  * Start at version 1.1.0 and use SemVer - https://semver.org
  * Rename this for your plugin and update it as you release new versions.
  */
-define( 'CLIENTIFY_ADDONS_VERSION', '1.1.0' );
+define( 'CLIENTIFY_ADDONS_VERSION', '1.1.3' );
+
+define( 'CLIENTIFY_GITHUB_USER', 'ClientifySL' );
+define( 'CLIENTIFY_GITHUB_REPO', 'clientify-addons-wc' );
 
 /**
  * The code that runs during plugin activation.
@@ -63,6 +66,7 @@ register_deactivation_hook( __FILE__, 'clientify_deactivate_addons' );
  * admin-specific hooks, and public-facing site hooks.
  */
 require plugin_dir_path( __FILE__ ) . 'includes/class-clientify-addons.php';
+require plugin_dir_path( __FILE__ ) . 'includes/class-clientify-updater.php';
 
 /**
  * Begins execution of the plugin.
@@ -79,4 +83,11 @@ function clientify_run_addons() {
 	$plugin->run();
 
 }
-clientify_run_addons();
+add_action( 'plugins_loaded', 'clientify_run_addons' );
+
+( new Clientify_Updater(
+	__FILE__,
+	CLIENTIFY_ADDONS_VERSION,
+	CLIENTIFY_GITHUB_USER,
+	CLIENTIFY_GITHUB_REPO
+) )->init();

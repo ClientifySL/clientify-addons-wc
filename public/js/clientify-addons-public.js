@@ -1,9 +1,10 @@
 ( function ( $ ) {
-	
+
 	console.log('init //')
 	let timer;
+	let iti = null;
 	const wcf_cart_abandonment = {
-		
+
 		init() {
 			if (
 				clientify_wcf_ca_vars._show_gdpr_message &&
@@ -81,6 +82,15 @@
 			return valid;
 		},
 
+		_getPhoneWithPrefix() {
+			const rawPhone = jQuery( '#billing_phone' ).val() || '';
+			const dialCode = jQuery( '#billing_phone' ).closest( '.iti' ).find( '.iti__selected-dial-code' ).text().trim();
+			if ( dialCode && rawPhone ) {
+				return dialCode + rawPhone;
+			}
+			return rawPhone;
+		},
+
 		_getCheckoutData() {
 			const wcf_email = jQuery('#billing_email').val() || jQuery('#email').val();
 
@@ -88,7 +98,7 @@
 				return;
 			}
 
-			let wcf_phone = jQuery( '#billing_phone' ).val();
+			let wcf_phone = wcf_cart_abandonment._getPhoneWithPrefix();
 			const atposition = wcf_email.indexOf( '@' );
 			const dotposition = wcf_email.lastIndexOf( '.' );
 
@@ -111,7 +121,7 @@
 				//If Email or Phone valid
 				const wcf_name = jQuery( '#billing_first_name' ).val();
 				const wcf_surname = jQuery( '#billing_last_name' ).val();
-				wcf_phone = jQuery( '#billing_phone' ).val();
+				wcf_phone = wcf_cart_abandonment._getPhoneWithPrefix();
 				const wcf_country = jQuery( '#billing_country' ).val();
 				const wcf_city = jQuery( '#billing_city' ).val();
 
@@ -201,7 +211,28 @@
 
 	wcf_cart_abandonment.init();
 
+	// CF7: after successful submission send contact to Clientify (fire-and-forget, no PHP blocking)
+	document.addEventListener( 'wpcf7mailsent', function ( event ) {
+		var inputs  = event.detail && event.detail.inputs ? event.detail.inputs : [];
+		var payload = {
+			action : 'clientify_cf7_contact_sync',
+			nonce  : clientify_wcf_ca_vars._cf7_nonce,
+		};
+		inputs.forEach( function ( field ) { payload[ field.name ] = field.value; } );
 
+		var body = Object.keys( payload ).map( function ( k ) {
+			return encodeURIComponent( k ) + '=' + encodeURIComponent( payload[ k ] );
+		} ).join( '&' );
+
+		if ( typeof fetch !== 'undefined' ) {
+			fetch( clientify_wcf_ca_vars.ajaxurl, {
+				method   : 'POST',
+				headers  : { 'Content-Type': 'application/x-www-form-urlencoded' },
+				body     : body,
+				keepalive: true,
+			} );
+		}
+	}, false );
 
 	// En tu archivo JavaScript (tu-script-ajax.js)
 jQuery(document).ready(function ($) {
