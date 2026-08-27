@@ -117,7 +117,6 @@ class Clientify_Endpoint {
             'callback' => array($this, 'get_clientify_logs'),
         ));
 
-
     }
 
     public function privileged_permission_callback($request) {
@@ -192,31 +191,56 @@ class Clientify_Endpoint {
         
         $endpoint_class = new Clientify_Endpoint();
         $url_base = $endpoint_class->get_local_api_url();
-        $created_at_min = empty($params->get_param('created_at_min')) ? date('d-m-Y') : $params->get_param('created_at_min');
-        $created_at_end = empty($params->get_param('created_at_end')) ? date('d-m-Y', strtotime('+1 day'))  : date('d-m-Y', strtotime($params->get_param('created_at_end') . ' +1 day'));
-        $per_page = $params->get_param('per_page');
-        $paged = ($params->get_param('page')) ? $params->get_param('page') : 1;
-        $offset = ( $per_page * $paged ) - $per_page;
+        $created_at_min = empty($params->get_param('created_at_min')) ? date('Y-m-d') : Clientify_Helper::parse_date_flexible($params->get_param('created_at_min'), 'Y-m-d');
+        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d', strtotime('+1 day')) : date('Y-m-d', strtotime(Clientify_Helper::parse_date_flexible($params->get_param('created_at_end'), 'Y-m-d') . ' +1 day'));
+        $per_page = max(1, intval($params->get_param('per_page') ?: 25));
+        $paged    = max(1, intval($params->get_param('page') ?: 1));
         $order_status_settings = get_option('CLIENTIFY_ORDER_STATUS');
-		$args = array(			
-            'date_query' => array(
-                'after' => $created_at_min,
-                'before' => $created_at_end,
-            ),
+
+        // Paso 1: solo IDs del rango de fechas (query liviana)
+        $all_ids = wc_get_orders([
+            'date_created' => $created_at_min . '...' . $created_at_end,
+            'status'       => $order_status_settings,
             'orderby'      => 'ID',
             'order'        => 'ASC',
-            'limit'        => isset($per_page) ? $per_page : -1,
-            'offset'       => $offset,
-            'paged'        => $paged,
-            'status'       => $order_status_settings,
-			'return'       => '*'
-		   ); 
+            'limit'        => -1,
+            'return'       => 'ids',
+            'type'         => 'shop_order',
+        ]);
 
-        $orders = wc_get_orders($args);
-       
+        // Paso 2: filtrar en SQL solo los que tienen productos activos
+        $valid_ids = [];
+        if (!empty($all_ids)) {
+            $placeholders = implode(',', array_fill(0, count($all_ids), '%d'));
+            $valid_ids = $wpdb->get_col(
+                $wpdb->prepare(
+                    "SELECT DISTINCT oi.order_id
+                     FROM {$wpdb->prefix}woocommerce_order_items oi
+                     INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim
+                         ON oim.order_item_id = oi.order_item_id AND oim.meta_key = '_product_id'
+                     INNER JOIN {$wpdb->posts} p
+                         ON p.ID = oim.meta_value
+                         AND p.post_type IN ('product','product_variation')
+                         AND p.post_status NOT IN ('trash','auto-draft')
+                     WHERE oi.order_id IN ($placeholders)
+                     AND oi.order_item_type = 'line_item'",
+                    ...$all_ids
+                )
+            );
+            // Preservar orden original por ID ASC
+            $valid_ids = array_values(array_intersect($all_ids, array_map('intval', $valid_ids)));
+        }
+
+        // Paso 3: paginar sobre IDs válidos y cargar solo los objetos de esta página
+        $page_ids = array_slice($valid_ids, ($paged - 1) * $per_page, $per_page);
+        $orders   = array_filter(array_map('wc_get_order', $page_ids));
+
         $all = array();
+        foreach( $orders as $order ) {
 
-        foreach( $orders as $order ) {  
+            if ( $order->get_type() === 'shop_order_refund' ) {
+                continue;
+            }
 
             $key = 'wc-' . $order->get_status();
             if ( in_array($key, $order_status_settings) ) {// check is order status is right
@@ -230,6 +254,7 @@ class Clientify_Endpoint {
                 $products = $order->get_items();         
                 $items = array();
                 $coupons_tags = array();
+                $order_tags = array();
 
                 foreach ( $products as $order_product ) {
                     $categories = array();
@@ -271,7 +296,7 @@ class Clientify_Endpoint {
                     $product = $order_product->get_product();
                     if (!$product) {
                         continue;
-                    } 
+                    }
                     try {
                         $sku = $product->get_sku();
                     } catch (Exception $e) {
@@ -430,6 +455,11 @@ class Clientify_Endpoint {
                     }
                 }
 
+                // Email siempre desde facturación de la orden
+                if ( is_array($contact) && !empty($order->get_billing_email()) ) {
+                    $contact['email'] = $order->get_billing_email();
+                }
+
                 $shipping = $order_data['shipping_total'];
 
 				if ($shipping === 0 || $shipping === "0" || $shipping === '' || $shipping === null || $shipping === false ) {
@@ -437,6 +467,11 @@ class Clientify_Endpoint {
 				}
 
                 $coupons = $order->get_coupon_codes();
+                $tipo_orden = $order->get_meta('tipodeorden');
+                if (!empty($tipo_orden) && !in_array($tipo_orden, $order_tags)) {
+                    $order_tags[] = $tipo_orden;
+                }
+            
 				
                 $data = array(
                     'contact' => $contact,
@@ -452,6 +487,7 @@ class Clientify_Endpoint {
                     'price' =>  number_format($total_price, 2, '.', ''),
                     'shipping' => $shipping,
                     'coupon' => $order_discount_total,
+                    'order_tags' => $order_tags
                     );
 
                     if ($coupons) {
@@ -479,22 +515,27 @@ class Clientify_Endpoint {
 
         }//endforeach
 		
+        $total_pages = $per_page > 0 ? ceil(count($valid_ids) / $per_page) : 1;
         $response = new WP_REST_Response($all, 200);
-   
+        $response->header('X-WP-Total', count($valid_ids));
+        $response->header('X-WP-TotalPages', $total_pages);
+
 		return $response;
 
 	}
-    
+
     function webhooks_status($params)
     {
         global $wpdb;
         $param = $params->get_param('hook');
-        
+        $abandoned_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';
+        $abandoned_card_exists = $wpdb->get_var( $wpdb->prepare("SHOW TABLES LIKE %s", $abandoned_table)) === $abandoned_table;
+
         if( $param=='all' ) {
             $status= array(
                 'pixel_script'   => $this->find_filter('wp_footer','clientify_api_script'),
-                'abandoned_card' => $this->find_filter('clientify_job','clientify_action_init'),
-                'contac'         => $this->find_filter('user_register','customer_add'),
+                'abandoned_card' => $abandoned_card_exists,
+                'contac'         => $this->find_filter('woocommerce_created_customer','customer_add'),
                 'order'          => $this->find_filter('woocommerce_order_status_changed','sync_hook_order'),
                 'product'        => $this->find_filter('woocommerce_new_product','product_published')                
             );
@@ -581,10 +622,10 @@ class Clientify_Endpoint {
             update_option('CLIENTIFY_STATUS', 1);
 
             if ( get_option('CLIENTIFY_STATUS') == 1 ) {
-                return new WP_REST_Response(array('message' => 'success','api_response' => $response,'data'=> $post_key), 200);
+                return new WP_REST_Response(array('message' => 'success','api_response' => $post_key,'data'=> $post_key), 200);
             }
             else{
-                return new WP_REST_Response(array('message' => 'error', 'api_response' => $response), 500);
+                return new WP_REST_Response(array('message' => 'error', 'api_response' => $post_key), 500);
             }  
 
         }elseif ( $set_send == "disconnect" ) {
@@ -628,57 +669,116 @@ class Clientify_Endpoint {
     /* get Customers  list all*/
     public function sync_all_customer($params){
 
-        $created_at_min = date("Y-m-d", strtotime($params->get_param('created_at_min')));
-        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d') : date("Y-m-d", strtotime($params->get_param('created_at_end')));
-        $per_page = intval($params->get_param('per_page', 25));
-        $paged = intval($params->get_param('page', 1));
         global $wpdb;
-        $contacts_all = array();
 
-        $query = $wpdb->prepare(
-            "SELECT u.ID
-            FROM {$wpdb->users} AS u
-            INNER JOIN {$wpdb->usermeta} AS um ON u.ID = um.user_id
-            WHERE DATE(u.user_registered) BETWEEN %s AND %s
-            AND um.meta_key = '{$wpdb->prefix}capabilities'
-            AND um.meta_value LIKE %s
-            ORDER BY u.user_registered ASC",
+        // Obtener parámetros y saneamiento
+        $created_at_min = empty($params->get_param('created_at_min')) ? date("Y-m-d") : Clientify_Helper::parse_date_flexible($params->get_param('created_at_min'), 'Y-m-d');
+        $created_at_end = empty($params->get_param('created_at_end')) ? date("Y-m-d") : Clientify_Helper::parse_date_flexible($params->get_param('created_at_end'), 'Y-m-d');
+        $per_page = max(1, intval($params->get_param('per_page', 25)));
+        $paged = max(1, intval($params->get_param('page', 1)));
+        $offset = ($paged - 1) * $per_page;
 
+        $contacts_page = array();
+
+        // Preparar claves y prefijos
+        $cap_key = $wpdb->prefix . 'capabilities';
+
+        // 1) Contar usuarios (clientes registrados) en rango
+        $count_query = $wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->users} AS u
+             INNER JOIN {$wpdb->usermeta} AS um ON u.ID = um.user_id
+             WHERE DATE(u.user_registered) BETWEEN %s AND %s
+             AND um.meta_key = %s
+             AND um.meta_value LIKE %s",
             $created_at_min,
             $created_at_end,
+            $cap_key,
             '%"customer"%'
         );
-        $users = $wpdb->get_results($query);
+        $total_users = intval($wpdb->get_var($count_query));
 
-        foreach ($users as $customer) {
-            $contacts_all[] = $this->get_contact($customer->ID);
+        // 2) Obtener users paginados: si el offset está dentro del conjunto de usuarios
+        if ($offset < $total_users) {
+            $users_to_fetch = min($per_page, $total_users - $offset);
+            $users_query = $wpdb->prepare(
+                "SELECT u.ID FROM {$wpdb->users} AS u
+                 INNER JOIN {$wpdb->usermeta} AS um ON u.ID = um.user_id
+                 WHERE DATE(u.user_registered) BETWEEN %s AND %s
+                 AND um.meta_key = %s
+                 AND um.meta_value LIKE %s
+                 ORDER BY u.user_registered ASC
+                 LIMIT %d OFFSET %d",
+                $created_at_min,
+                $created_at_end,
+                $cap_key,
+                '%"customer"%',
+                $users_to_fetch,
+                $offset
+            );
+            $users = $wpdb->get_results($users_query);
+
+            foreach ($users as $u) {
+                // Reutilizamos la función existente para construir el contacto
+                $contact = $this->get_contact($u->ID);
+                if ($contact) {
+                    $contacts_page[] = $contact;
+                }
+            }
         }
 
-        $args_orders = array(
-            'limit'        => -1,
-            'date_created' => $created_at_min . '...' . $created_at_end,
-            'orderby'      => 'date',
-            'order'        => 'ASC',
-        );
-        $orders = wc_get_orders($args_orders);
+        // 3) Si la página no está completa, completar con clientes guest (pedidos con _customer_user = 0)
+        $remaining = $per_page - count($contacts_page);
+        if ($remaining > 0) {
+            // Calcular offset para la parte de guest en la paginación global (si la página pedida empieza después de todos los users)
+            $guest_global_offset = max(0, $offset - $total_users);
 
-        foreach ($orders as $order) {
-            if ((int) $order->get_user_id() === 0) {
-                $guest_data = $this->get_guest_contact($order);
-                if (isset($guest_data['email'])) {
-                    $emails_existing = array_column($contacts_all, 'email');
-                    if (!in_array($guest_data['email'], $emails_existing)) {
-                        $contacts_all[] = $guest_data;
+            // Consultar emails únicos de pedidos guest (entre fechas) usando postmeta (más eficiente que wc_get_orders con limit -1)
+            $guest_query = $wpdb->prepare(
+                "SELECT DISTINCT pm_email.meta_value AS email, p.ID as order_id
+                 FROM {$wpdb->posts} p
+                 JOIN {$wpdb->postmeta} pm_user ON pm_user.post_id = p.ID AND pm_user.meta_key = '_customer_user'
+                 JOIN {$wpdb->postmeta} pm_email ON pm_email.post_id = p.ID AND pm_email.meta_key = '_billing_email'
+                 WHERE p.post_type = 'shop_order'
+                   AND DATE(p.post_date) BETWEEN %s AND %s
+                   AND pm_user.meta_value = %s
+                   AND pm_email.meta_value != ''
+                 GROUP BY pm_email.meta_value
+                 ORDER BY p.post_date ASC
+                 LIMIT %d OFFSET %d",
+                $created_at_min,
+                $created_at_end,
+                '0',
+                $remaining,
+                $guest_global_offset
+            );
+
+            $guest_rows = $wpdb->get_results($guest_query);
+
+            // Evitar duplicados frente a usuarios ya añadidos
+            $existing_emails = array();
+            foreach ($contacts_page as $c) {
+                if (!empty($c['email'])) $existing_emails[] = $c['email'];
+            }
+
+            foreach ($guest_rows as $gr) {
+                if (empty($gr->email)) continue;
+                if (in_array($gr->email, $existing_emails, true)) continue;
+
+                // Cargar pedido mínimo por ID y reutilizar get_guest_contact para consistencia
+                $order = wc_get_order($gr->order_id);
+                if ($order) {
+                    $guest_contact = $this->get_guest_contact($order);
+                    if (isset($guest_contact['email']) && !in_array($guest_contact['email'], $existing_emails, true)) {
+                        $contacts_page[] = $guest_contact;
+                        $existing_emails[] = $guest_contact['email'];
+                        if (count($contacts_page) >= $per_page) break;
                     }
                 }
             }
         }
 
-        $total_items = count($contacts_all);
-        $offset = ($paged - 1) * $per_page;
-        $contacts_paginated = array_slice($contacts_all, $offset, $per_page);
-
-        $response = new WP_REST_Response($contacts_paginated, 200);        
+        // Responder solo con la página calculada (ya paginada por BD)
+        $response = new WP_REST_Response($contacts_page, 200);
         return $response;
     }
 
@@ -807,7 +907,7 @@ class Clientify_Endpoint {
         }
         return $data;
     }
-    
+
     /* get guest contact from WC_Order */
     function get_guest_contact($order) {
         $billing_email = $order->get_billing_email();
@@ -1089,26 +1189,40 @@ class Clientify_Endpoint {
 
         global $wpdb;
         $all = array();
-        $created_from = date("Y-m-d", strtotime($params->get_param('created_from')));
-        $created_at_end = empty($params->get_param('created_at_end')) ? date("Y-m-d") : $params->get_param('created_at_end');
+        $created_from_raw = $params->get_param('created_from');
+        $created_from = empty($created_from_raw) ? date("Y-m-d") : date("Y-m-d", strtotime($created_from_raw));
+        $created_at_end_raw = $params->get_param('created_at_end');
+        $created_at_end = empty($created_at_end_raw) ? date("Y-m-d") : $created_at_end_raw;
 
         $per_page = empty($params->get_param('per_page')) ? 0 : $params->get_param('per_page');
         $paged = empty($params->get_param('page')) ? 1 : $params->get_param('page');
-		$page =(int)(!isset($paged)) ? 1 : $paged;
-		$per_page = (int)$params["per_page"];
-		$date_null = $created_from != 0 ? "between  '".date("Y-m-d", strtotime($created_from))."'  and '".date("Y-m-d", strtotime($created_at_end))."'" : '';
-		$limit = $per_page != 0 ? 'LIMIT '.(($page-1)*$per_page).' , '.$per_page.'' : '' ;
+		$page  = (int) $paged;
+		$per_page = (int) $per_page;
+		$offset = ($page - 1) * $per_page;
+		$cart_abandonment_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';
 
-        //$abandoned_carts = $wpdb->get_results("SELECT checkout_id, session_id, id FROM ". $wpdb->prefix . "clientify_ca_cart_abandonment WHERE DATE(time)  ".$date_null." group by checkout_id ".$limit); 
-        $abandoned_carts = $wpdb->get_results("SELECT checkout_id, session_id, id FROM ". $wpdb->prefix . "clientify_ca_cart_abandonment WHERE DATE(time) ".$date_null." ".$limit);   
+		if ( $created_from != 0 ) {
+			$abandoned_carts = $wpdb->get_results(
+				$wpdb->prepare(
+					"SELECT checkout_id, session_id, id FROM {$cart_abandonment_table} WHERE DATE(time) BETWEEN %s AND %s" . ( $per_page > 0 ? " LIMIT %d OFFSET %d" : "" ),
+					date("Y-m-d", strtotime($created_from)),
+					date("Y-m-d", strtotime($created_at_end)),
+					...( $per_page > 0 ? [ $per_page, $offset ] : [] )
+				)
+			);
+		} else {
+			$abandoned_carts = $wpdb->get_results(
+				$per_page > 0
+					? $wpdb->prepare( "SELECT checkout_id, session_id, id FROM {$cart_abandonment_table} LIMIT %d OFFSET %d", $per_page, $offset )
+					: "SELECT checkout_id, session_id, id FROM {$cart_abandonment_table}"
+			);
+		}
 
         $endpoint_class = new Clientify_Endpoint();
         $url_base = $endpoint_class->get_local_api_url();
 
-        $helper = new Clientify_Helper(); 
+        $helper = new Clientify_Helper();
 
-        
-        
         foreach ( $abandoned_carts as $abandoned_cart ) {
             if ($abandoned_cart->session_id)  {
                 $details          = $helper->get_checkout_details( $abandoned_cart->session_id );   
@@ -1127,9 +1241,9 @@ class Clientify_Endpoint {
 
                 foreach ($cart_content as $cart_item) {
                 
-                    $discount = $discount + ( $cart_item['line_subtotal'] - $cart_item['line_total'] );
-                    $total = $total + $cart_item['line_subtotal'];
-                    $tax = $tax + $cart_item['line_tax'];
+                    $discount = $discount + ( floatval($cart_item['line_subtotal']) - floatval($cart_item['line_total']) );
+                    $total = $total + floatval($cart_item['line_subtotal']);
+                    $tax = $tax + floatval($cart_item['line_tax']);
                     $shipping = 0 ;
                     $product_id = $cart_item['product_id'];
                     $categories = array();
@@ -1338,6 +1452,7 @@ class Clientify_Endpoint {
                 }
 
                 if ( !empty($user_details->wcf_phone_number) ) {
+                    if ( !isset($customer_phones) ) $customer_phones = array();
                     $data['contact']['phones'][] = array('phone' => $user_details->wcf_phone_number);
                     $customer_phones[] = $user_details->wcf_phone_number;
                 }
@@ -1351,10 +1466,12 @@ class Clientify_Endpoint {
 
         }//foreach
         
-        $response = new WP_REST_Response($all, 200);        
-        //$response->header( 'Link', $total_pages); // maximum number of pages 
+        $total_pages = $per_page > 0 ? ceil(count($valid_ids) / $per_page) : 1;
+        $response = new WP_REST_Response($all, 200);
+        $response->header('X-WP-Total', count($valid_ids));
+        $response->header('X-WP-TotalPages', $total_pages);
         return $response;
-		
+
 	}
 
     /* sync abandonded carts - revised*/
@@ -1364,23 +1481,39 @@ class Clientify_Endpoint {
         $api = new Clientify_Api;
         $all = array();
         $result_sync = array();
-        $created_from = date("Y-m-d", strtotime($params->get_param('created_from')));
-        $created_end = empty($params->get_param('created_at_end')) ? date("Y-m-d") : $params->get_param('created_at_end');
+        $created_from_raw = $params->get_param('created_from');
+        $created_from = empty($created_from_raw) ? date("Y-m-d") : date("Y-m-d", strtotime($created_from_raw));
+        $created_end_raw = $params->get_param('created_at_end');
+        $created_end = empty($created_end_raw) ? date("Y-m-d") : $created_end_raw;
 
         $per_page = empty($params->get_param('per_page')) ? 0 : $params->get_param('per_page');
         $paged = empty($params->get_param('page')) ? 1 : $params->get_param('page');
-        $page =(int)(!isset($paged)) ? 1 : $paged;
-        $per_page = (int)$params["per_page"];
-        $date_null = $created_from != 0 ? "between  '".date("Y-m-d", strtotime($created_from))."'  and '".date("Y-m-d", strtotime($created_end))."'" : '';
-        $limit = $per_page != 0 ? 'LIMIT '.(($page-1)*$per_page).' , '.$per_page.'' : '' ;
+        $page     = (int) $paged;
+        $per_page = (int) $per_page;
+        $offset   = ($page - 1) * $per_page;
+        $cart_abandonment_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';
 
-        //$abandoned_carts = $wpdb->get_results("SELECT checkout_id, session_id, id FROM ". $wpdb->prefix . "clientify_ca_cart_abandonment WHERE DATE(time)  ".$date_null." group by checkout_id ".$limit); 
-        $abandoned_carts = $wpdb->get_results("SELECT checkout_id, session_id, id FROM ". $wpdb->prefix . "clientify_ca_cart_abandonment WHERE DATE(time) ".$date_null." ".$limit);   
+        if ( $created_from != 0 ) {
+            $abandoned_carts = $wpdb->get_results(
+                $wpdb->prepare(
+                    "SELECT checkout_id, session_id, id FROM {$cart_abandonment_table} WHERE DATE(time) BETWEEN %s AND %s" . ( $per_page > 0 ? " LIMIT %d OFFSET %d" : "" ),
+                    date("Y-m-d", strtotime($created_from)),
+                    date("Y-m-d", strtotime($created_end)),
+                    ...( $per_page > 0 ? [ $per_page, $offset ] : [] )
+                )
+            );
+        } else {
+            $abandoned_carts = $wpdb->get_results(
+                $per_page > 0
+                    ? $wpdb->prepare( "SELECT checkout_id, session_id, id FROM {$cart_abandonment_table} LIMIT %d OFFSET %d", $per_page, $offset )
+                    : "SELECT checkout_id, session_id, id FROM {$cart_abandonment_table}"
+            );
+        }
 
         $endpoint_class = new Clientify_Endpoint();
         $url_base = $endpoint_class->get_local_api_url();
 
-        $helper = new Clientify_Helper(); 
+        $helper = new Clientify_Helper();
 
         foreach ( $abandoned_carts as $abandoned_cart ) {
             if ($abandoned_cart->session_id)  {
@@ -1400,9 +1533,9 @@ class Clientify_Endpoint {
 
                 foreach ($cart_content as $cart_item) {
                 
-                    $discount = $discount + ( $cart_item['line_subtotal'] - $cart_item['line_total'] );
-                    $total = $total + $cart_item['line_subtotal'];
-                    $tax = $tax + $cart_item['line_tax'];
+                    $discount = $discount + ( floatval($cart_item['line_subtotal']) - floatval($cart_item['line_total']) );
+                    $total = $total + floatval($cart_item['line_subtotal']);
+                    $tax = $tax + floatval($cart_item['line_tax']);
                     $shipping = 0 ;
                     $product_id = $cart_item['product_id'];
                     $categories = array();
@@ -1609,6 +1742,7 @@ class Clientify_Endpoint {
                 }
 
                 if ( !empty($user_details->wcf_phone_number) ) {
+                    if ( !isset($customer_phones) ) $customer_phones = array();
                     $data['contact']['phones'][] = array('phone' => $user_details->wcf_phone_number);
                     $customer_phones[] = $user_details->wcf_phone_number;
                 }
@@ -1643,33 +1777,55 @@ class Clientify_Endpoint {
         
         $endpoint_class = new Clientify_Endpoint();
         $url_base = $endpoint_class->get_local_api_url();
-        $created_at_min = empty($params->get_param('created_at_min')) ? date('d-m-Y') : $params->get_param('created_at_min');
-        $created_at_end = empty($params->get_param('created_at_end')) ? date('d-m-Y', strtotime('+1 day'))  : date('d-m-Y', strtotime($params->get_param('created_at_end') . ' +1 day'));
-        $per_page = $params->get_param('per_page');
-        $paged = ($params->get_param('page')) ? $params->get_param('page') : 1;
-        $offset = ( $per_page * $paged ) - $per_page;
+        $created_at_min = empty($params->get_param('created_at_min')) ? date('Y-m-d') : Clientify_Helper::parse_date_flexible($params->get_param('created_at_min'), 'Y-m-d');
+        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d', strtotime('+1 day')) : date('Y-m-d', strtotime(Clientify_Helper::parse_date_flexible($params->get_param('created_at_end'), 'Y-m-d') . ' +1 day'));
+        $per_page = max(1, intval($params->get_param('per_page') ?: 25));
+        $paged    = max(1, intval($params->get_param('page') ?: 1));
         $order_status_settings = get_option('CLIENTIFY_ORDER_STATUS');
 
-        $args = array(          
-            'date_query' => array(
-                'after' => $created_at_min,
-                'before' => $created_at_end,
-            ),
+        $all_ids = wc_get_orders([
+            'date_created' => $created_at_min . '...' . $created_at_end,
+            'status'       => $order_status_settings,
             'orderby'      => 'ID',
             'order'        => 'ASC',
-            'limit'        => isset($per_page) ? $per_page : -1,
-            'offset'       => $offset,
-            'paged'        => $paged,
-            'status'       => $order_status_settings,
-            'return'       => '*'
-           ); 
-        
-        $orders = wc_get_orders($args);
+            'limit'        => -1,
+            'return'       => 'ids',
+            'type'         => 'shop_order',
+        ]);
+
+        $valid_ids = [];
+        if (!empty($all_ids)) {
+            $placeholders = implode(',', array_fill(0, count($all_ids), '%d'));
+            $valid_ids = $wpdb->get_col(
+                $wpdb->prepare(
+                    "SELECT DISTINCT oi.order_id
+                     FROM {$wpdb->prefix}woocommerce_order_items oi
+                     INNER JOIN {$wpdb->prefix}woocommerce_order_itemmeta oim
+                         ON oim.order_item_id = oi.order_item_id AND oim.meta_key = '_product_id'
+                     INNER JOIN {$wpdb->posts} p
+                         ON p.ID = oim.meta_value
+                         AND p.post_type IN ('product','product_variation')
+                         AND p.post_status NOT IN ('trash','auto-draft')
+                     WHERE oi.order_id IN ($placeholders)
+                     AND oi.order_item_type = 'line_item'",
+                    ...$all_ids
+                )
+            );
+            $valid_ids = array_values(array_intersect($all_ids, array_map('intval', $valid_ids)));
+        }
+
+        $page_ids = array_slice($valid_ids, ($paged - 1) * $per_page, $per_page);
+        $orders   = array_filter(array_map('wc_get_order', $page_ids));
        
         $all = array();
         $result_sync = array();
 
-        foreach( $orders as $order ) {  
+        foreach( $orders as $order ) {
+             
+            if ( $order->get_type() === 'shop_order_refund' ) {
+                continue;
+            }
+
             $key = 'wc-' . $order->get_status();
             if ( in_array($key, $order_status_settings) ) {// check is order status is right
                 
@@ -1682,6 +1838,7 @@ class Clientify_Endpoint {
                 $products = $order->get_items();         
                 $items = array();
                 $coupons_tags = array();
+                $order_tags = array();
 
                 foreach ( $products as $order_product ) {
                     $categories = array();
@@ -1689,7 +1846,13 @@ class Clientify_Endpoint {
                     $join_categories = "";
                     $join_subcategories = "";
 
-                    $terms = get_the_terms($product->id, 'product_cat');
+                    $product = $order_product->get_product();
+
+                    if (!$product) {
+                        continue;
+                    }
+
+                    $terms = get_the_terms($order_product['product_id'], 'product_cat');
 
                     if (!empty($terms)) {
                         foreach ($terms as $term) {
@@ -1720,8 +1883,6 @@ class Clientify_Endpoint {
                     }
 
                     $join_cat = $join_categories."/".$join_subcategories;
-
-                    $product = $order_product->get_product();
                         
                     try {
                         $sku = $product->get_sku();
@@ -1881,6 +2042,11 @@ class Clientify_Endpoint {
                     }
                 }
 
+                // Email siempre desde facturación de la orden
+                if ( is_array($contact) && !empty($order->get_billing_email()) ) {
+                    $contact['email'] = $order->get_billing_email();
+                }
+
                 $shipping = $order_data['shipping_total'];
 
 				if ($shipping === 0 || $shipping === "0" || $shipping === '' || $shipping === null || $shipping === false ) {
@@ -1888,6 +2054,10 @@ class Clientify_Endpoint {
 				}
 				
                 $coupons = $order->get_coupon_codes();
+                $tipo_orden = $order->get_meta('tipodeorden');
+                if (!empty($tipo_orden) && !in_array($tipo_orden, $order_tags)) {
+                    $order_tags[] = $tipo_orden;
+                }
 
                 $data = array(
                     'contact' => $contact,
@@ -1900,9 +2070,10 @@ class Clientify_Endpoint {
                     'store_url' => $url_base,
                     'currency' => $currency,
                     'products' => $items,
-                    'price' =>  $total_price,
+                    'price' =>  number_format($total_price, 2, '.', ''),
                     'shipping' => $shipping,
-                    'coupon' => 0,
+                    'coupon' => $order_discount_total,
+                    'order_tags' => $order_tags
                     );
 
                     if ($coupons) {
@@ -1911,7 +2082,7 @@ class Clientify_Endpoint {
                         }
                         $data['coupon_tags'] = $coupons_tags;
                     }
-                
+
                     if ( !empty($lang) ) {
                         $data['custom_field'] = array(
                         'field' => 'ecommerce_language',
@@ -1919,13 +2090,11 @@ class Clientify_Endpoint {
                         );
                     }
 
-                 //Send data to Clientify and veridy contact is true
-                if($contact){
+                if ( $contact && !empty($items) ) {
                     $order = $api->post_order_clientify( $data );
                     $result_sync [] = $order;
+                    $all [] = array($data);
                 }
-
-                $all [] = $data;
 
                 
             }//endif
@@ -1943,8 +2112,8 @@ class Clientify_Endpoint {
     function sync_contacts($params){
 
 
-        $created_at_min = date("Y-m-d", strtotime($params->get_param('created_at_min')));
-        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d', strtotime('+1 day')) : date('Y-m-d', strtotime($params->get_param('created_at_end') . ' +1 day'));
+        $created_at_min = empty($params->get_param('created_at_min')) ? date('Y-m-d') : Clientify_Helper::parse_date_flexible($params->get_param('created_at_min'), 'Y-m-d');
+        $created_at_end = empty($params->get_param('created_at_end')) ? date('Y-m-d', strtotime('+1 day')) : date('Y-m-d', strtotime(Clientify_Helper::parse_date_flexible($params->get_param('created_at_end'), 'Y-m-d') . ' +1 day'));
         $per_page = intval($params->get_param('per_page'));
         $paged = intval($params->get_param('page', 1));
         $url_base = $this->get_local_api_url();
