@@ -268,7 +268,7 @@ class Clientify_Addons {
 			if ( class_exists( 'UM' ) ) {
 				$this->loader->add_action( 'um_registration_complete', $register_custom_post_type, 'sync_um_registration', 20, 2 );
 			}
-			$this->loader->add_action('woocommerce_order_status_changed', $register_custom_post_type,'sync_hook_order', 10, 3);
+			$this->loader->add_action('woocommerce_order_status_changed', $register_custom_post_type,'sync_hook_order', PHP_INT_MAX, 3);
 			$this->loader->add_action('woocommerce_update_product', $register_custom_post_type,'product_published', 5, 1);
 			$this->loader->add_action('woocommerce_new_product', $register_custom_post_type,'product_published', 5, 1);
 
