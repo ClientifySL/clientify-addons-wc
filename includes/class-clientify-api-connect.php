@@ -14,7 +14,7 @@ if (!class_exists('Clientify_Api')) {
         var $timeout = 30; // Timeout en segundos para las llamadas HTTP
 
         // Configuración de la API
-        var $api_url = 'https://api-plus.clientify.com/api/ecommerce/v2/';
+        var $api_url = 'https://api-plus.clientify.com/';
 
         // Configuración de SSL y HTTP
         var $ssl_verify = true;
