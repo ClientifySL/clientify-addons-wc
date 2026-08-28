@@ -123,10 +123,9 @@ class Clientify_Addons_Public {
 
 
 
-    wp_enqueue_script('clientify-script', plugins_url('../public/js/clientify-addons-public.js', __FILE__), array('jquery','prefix_script'), '1.0', true);
+    wp_enqueue_script('clientify-script', plugins_url('../public/js/clientify-addons-public.js', __FILE__), array('jquery'), '1.0', true);
 	wp_localize_script( 'clientify-script', 'clientify_wcf_ca_vars', $vars );
 	wp_localize_script('clientify-script', 'clientify_ajax', array('ajax_url' => admin_url('admin-ajax.php')));
-	wp_enqueue_script( 'prefix_script', 'https://cdn.jsdelivr.net/npm/intl-tel-input@19.5.7/build/js/intlTelInput.min.js', array( 'jquery' ), $this->version, true );
 	}
 
 }
