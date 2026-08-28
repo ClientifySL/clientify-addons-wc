@@ -829,7 +829,6 @@ class Clientify_Endpoint {
 			}
 			/*  condition to support other gdprs */
 			$content_comm = get_user_meta($user_id, 'content_comm', true);
-			$data['gdpr_accept'] = $content_comm;
 			if (!empty($content_comm) && ($content_comm === "yes")) {
 				$data['gdpr_accept'] = "accept";
 			}
