@@ -540,15 +540,17 @@ class Clientify_Plugin_Core
 			$data['custom_field'] = array( 'field' => 'ecommerce_language', 'value' => $lang );
 		}
 
-		// GDPR: check CF7 acceptance fields (acceptance-* pattern or named 'legal')
-		$gdpr_accept = 'revoke';
+		// GDPR: check CF7 acceptance fields (acceptance-* pattern or named 'legal').
+		// No se manda 'revoke' por defecto: este formulario puede ser rellenado por un
+		// cliente que ya dio su consentimiento antes (p.ej. en una compra WooCommerce) via
+		// un formulario de contacto/soporte sin checkbox de GDPR - no es una revocacion
+		// explicita y no debe pisar el consentimiento ya registrado en Clientify.
 		foreach ( $_POST as $key => $value ) {
 			if ( ( strpos( $key, 'acceptance-' ) === 0 || $key === 'legal' ) && ! empty( $value ) ) {
-				$gdpr_accept = 'accept';
+				$data['gdpr_accept'] = 'accept';
 				break;
 			}
 		}
-		$data['gdpr_accept'] = $gdpr_accept;
 
 		$api = new Clientify_Api();
 		$api->post_contacts_async( $data );
@@ -864,17 +866,18 @@ class Clientify_Plugin_Core
 	function guardar_campo_suscripcion_checkout() {
 		$user_id = get_current_user_id();
 
-		if ( isset( $_POST['suscripcion_newsletter'] ) ) {
-			$suscripcion = 'accept';
-		} elseif ( isset( $_POST['mailchimp_woocommerce_newsletter'] ) ) {
-			$suscripcion = ( $_POST['mailchimp_woocommerce_newsletter'] == '1' ) ? 'accept' : 'revoke';
-		} else {
-			$suscripcion = 'revoke';
+		if ( ! $user_id ) {
+			return;
 		}
 
-		if ( $user_id ) {
-			update_user_meta( $user_id, 'suscripcion_newsletter', $suscripcion );
+		if ( isset( $_POST['suscripcion_newsletter'] ) ) {
+			update_user_meta( $user_id, 'suscripcion_newsletter', 'accept' );
+		} elseif ( isset( $_POST['mailchimp_woocommerce_newsletter'] ) ) {
+			update_user_meta( $user_id, 'suscripcion_newsletter', $_POST['mailchimp_woocommerce_newsletter'] == '1' ? 'accept' : 'revoke' );
 		}
+		// Si el checkbox no viene en el POST no es una revocacion explicita del
+		// cliente (el checkbox se pinta sin marcar en cada checkout y no se
+		// reenvia si no se toca) - no tocar el consentimiento ya guardado.
 	}
 
 	function agregar_checkbox_despues_privacidad() {
