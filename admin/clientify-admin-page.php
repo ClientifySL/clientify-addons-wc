@@ -57,7 +57,7 @@ function clientify_settings_page()
 								<div class="message"></div>
 							</div>
 							<div class="controls">
-								<input type="text" id="clientify_gdpr_text" class="floatLabel" name="clientify_gdpr_text" value="<?php echo esc_attr(get_option('CLIENTIFY_GDPR_TEXT')); ?>">
+								<input type="text" id="clientify_gdpr_text" class="floatLabel" name="CLIENTIFY_GDPR_TEXT" value="<?php echo esc_attr(get_option('CLIENTIFY_GDPR_TEXT')); ?>">
 								<label for="key"><?php echo esc_html__('Texto Personalizado para el GDPR', 'clientify'); ?></label>
 							</div>
 							<?php

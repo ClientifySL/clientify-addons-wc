@@ -43,7 +43,7 @@ class Clientify_Plugin_Core
 		//register our settings
 		register_setting('clientify-settings-group', 'CLIENTIFY_API_KEY');
 		register_setting('clientify-settings-gdpr', 'CLIENTIFY_GDPR', 0);
-		register_setting('clientify-settings-gdpr_text', 'CLIENTIFY_GDPR_text');
+		register_setting('clientify-settings-group', 'CLIENTIFY_GDPR_TEXT');
 		register_setting('clientify-settings-group', 'CLIENTIFY_API_LOG');
 		register_setting('clientify-settings-script', 'CLIENTIFY_SCRIPT', 0);
 		register_setting('clientify-settings-group', 'CLIENTIFY_BOTTOM_SCRIPT');
@@ -80,10 +80,10 @@ class Clientify_Plugin_Core
 		$gdpr_status   = isset( $_POST['gdpr_status'] ) ? intval( $_POST['gdpr_status'] ) : 0;
 		$gdpr_text     = sanitize_text_field( isset( $_POST['gdpr_text'] ) ? $_POST['gdpr_text'] : '' );
 		if ( empty( $gdpr_text ) ) {
-			$gdpr_text = 'Acepto recibir comunicaciones comerciales GDPR';
+			$gdpr_text = 'Acepto el envío de comunicaciones comerciales y promociones. (Opcional)';
 		}
 		update_option( 'CLIENTIFY_ORDER_STATUS', $order_process );
-		update_option( 'clientify_gdpr_text', $gdpr_text );
+		update_option( 'CLIENTIFY_GDPR_TEXT', $gdpr_text );
 		update_option( 'CLIENTIFY_GDPR', $gdpr_status );
 
 		$endpoint_class = new Clientify_Endpoint();
@@ -863,31 +863,57 @@ class Clientify_Plugin_Core
 		}
 
 	}
-	function guardar_campo_suscripcion_checkout() {
+	function guardar_campo_suscripcion_checkout( $order_id ) {
 		$user_id = get_current_user_id();
 
-		if ( ! $user_id ) {
-			return;
+		$suscripcion = null;
+		if ( isset( $_POST['suscripcion_newsletter'] ) ) {
+			$suscripcion = 'accept';
+		} elseif ( isset( $_POST['mailchimp_woocommerce_newsletter'] ) ) {
+			$suscripcion = $_POST['mailchimp_woocommerce_newsletter'] == '1' ? 'accept' : 'revoke';
 		}
 
-		if ( isset( $_POST['suscripcion_newsletter'] ) ) {
-			update_user_meta( $user_id, 'suscripcion_newsletter', 'accept' );
-		} elseif ( isset( $_POST['mailchimp_woocommerce_newsletter'] ) ) {
-			update_user_meta( $user_id, 'suscripcion_newsletter', $_POST['mailchimp_woocommerce_newsletter'] == '1' ? 'accept' : 'revoke' );
-		}
 		// Si el checkbox no viene en el POST no es una revocacion explicita del
 		// cliente (el checkbox se pinta sin marcar en cada checkout y no se
 		// reenvia si no se toca) - no tocar el consentimiento ya guardado.
+		if ( $suscripcion === null ) {
+			return;
+		}
+
+		if ( $user_id ) {
+			update_user_meta( $user_id, 'suscripcion_newsletter', $suscripcion );
+		}
+
+		// Guardar tambien en el meta del pedido para invitados (checkout classic),
+		// ya que la sincronizacion de contactos de invitados lee '_clientify_gdpr_accept'
+		// del pedido, no del user_meta (que no existe sin cuenta).
+		if ( $order_id ) {
+			$order = wc_get_order( $order_id );
+			if ( $order ) {
+				$order->update_meta_data( '_clientify_gdpr_accept', $suscripcion );
+				$order->save();
+			}
+		}
 	}
 
 	function agregar_checkbox_despues_privacidad() {
 		if ( self::detect_external_gdpr_plugin() || self::detect_newsletter_plugin() ) {
 			return;
 		}
+		// Este hook legado ('woocommerce_review_order_before_submit') tambien lo
+		// ejecuta WooCommerce Blocks por compatibilidad, duplicando el checkbox
+		// nativo que ya registramos via register_block_checkout_gdpr_field()
+		// (location 'contact'). Desde WC 8.9 esa API de campos adicionales se
+		// renderiza tanto en el checkout por bloques como en el shortcode
+		// clasico, asi que si esta disponible no pintamos este checkbox suelto
+		// para evitar el duplicado.
+		if ( function_exists( 'woocommerce_register_additional_checkout_field' ) ) {
+			return;
+		}
     ?>
     <div class="form-row additional-terms">
         <label class="woocommerce-form__label woocommerce-form__label-for-checkbox checkbox">
-            <input type="checkbox" class="woocommerce-form__input woocommerce-form__input-checkbox input-checkbox" name="suscripcion_newsletter" id="suscripcion_newsletter" /> <span><?php _e(get_option('CLIENTIFY_GDPR_TEXT'), 'woocommerce'); ?></span>
+            <input type="checkbox" class="woocommerce-form__input woocommerce-form__input-checkbox input-checkbox" name="suscripcion_newsletter" id="suscripcion_newsletter" /> <span><?php echo esc_html( get_option( 'CLIENTIFY_GDPR_TEXT' ) ); ?></span>
         </label>
     </div>
     <?php
@@ -1120,16 +1146,36 @@ class Clientify_Plugin_Core
 		return null;
 	}
 
+	/**
+	 * Lee el consentimiento GDPR guardado de forma nativa por WooCommerce Blocks
+	 * (checkout por bloques / Store API) para el campo adicional registrado en
+	 * register_block_checkout_gdpr_field(). WooCommerce persiste automaticamente
+	 * el valor en el meta del pedido con el prefijo '_wc_other/' + el id del campo.
+	 *
+	 * @param WC_Order $order
+	 * @return string|null 'accept', 'revoke' o null si el campo no viene en el pedido.
+	 */
+	static function get_block_checkout_gdpr_consent( $order ) {
+		if ( ! $order ) {
+			return null;
+		}
+		$raw = $order->get_meta( '_wc_other/clientify-addons/gdpr_consent' );
+		if ( $raw === '' || $raw === null ) {
+			return null;
+		}
+		return in_array( (string) $raw, array( '1', 'yes', 'true' ), true ) ? 'accept' : 'revoke';
+	}
+
 	function register_block_checkout_gdpr_field() {
 		if ( self::detect_external_gdpr_plugin() || self::detect_newsletter_plugin() ) {
 			return;
 		}
 		// WC 8.9+: native additional checkout fields (handles UI automatically)
-		if ( function_exists( 'woocommerce_register_additional_checkout_fields' ) ) {
-			woocommerce_register_additional_checkout_fields( array(
+		if ( function_exists( 'woocommerce_register_additional_checkout_field' ) ) {
+			woocommerce_register_additional_checkout_field( array(
 				'id'       => 'clientify-addons/gdpr_consent',
-				'label'    => get_option( 'CLIENTIFY_GDPR_TEXT', __( 'Acepto recibir comunicaciones comerciales GDPR', 'clientify-addons' ) ),
-				'location' => 'order',
+				'label'    => get_option( 'CLIENTIFY_GDPR_TEXT' ),
+				'location' => 'contact',
 				'type'     => 'checkbox',
 				'required' => false,
 			) );
@@ -1164,7 +1210,7 @@ class Clientify_Plugin_Core
 			return;
 		}
 		// Only needed when NOT using the WC 8.9+ native additional fields API
-		if ( function_exists( 'woocommerce_register_additional_checkout_fields' ) ) {
+		if ( function_exists( 'woocommerce_register_additional_checkout_field' ) ) {
 			return;
 		}
 		wp_enqueue_script(
@@ -1175,32 +1221,23 @@ class Clientify_Plugin_Core
 			true
 		);
 		wp_localize_script( 'clientify-gdpr-blocks', 'clientify_gdpr_params', array(
-			'gdpr_text'       => get_option( 'CLIENTIFY_GDPR_TEXT', __( 'Acepto recibir comunicaciones comerciales GDPR', 'clientify-addons' ) ),
+			'gdpr_text'       => get_option( 'CLIENTIFY_GDPR_TEXT', __( 'Acepto el envío de comunicaciones comerciales y promociones. (Opcional)', 'clientify-addons' ) ),
 			'external_plugin' => self::detect_external_gdpr_plugin(),
 		) );
 	}
 
 	function save_block_checkout_gdpr( $order, $request ) {
-		$user_id    = $order->get_customer_id();
-		$gdpr_value = null;
-
-		if ( function_exists( 'woocommerce_get_checkout_field_value_from_request' ) ) {
-			$gdpr_value = woocommerce_get_checkout_field_value_from_request( $request, 'clientify-addons/gdpr_consent' );
-		}
-
-		if ( $gdpr_value === null ) {
-			$extensions = $request->get_param( 'extensions' );
-			if ( isset( $extensions['clientify-addons']['gdpr_consent'] ) ) {
-				$gdpr_value = (bool) $extensions['clientify-addons']['gdpr_consent'];
-			}
-		}
-
-		if ( $gdpr_value === null ) {
+		// WooCommerce persiste el campo adicional 'clientify-addons/gdpr_consent' de
+		// forma nativa en el meta del pedido (prefijo '_wc_other/') una vez registrado
+		// vía woocommerce_register_additional_checkout_field(). Lo leemos con el mismo
+		// helper que usa la sincronización, y lo espejamos a nuestras claves propias
+		// (user_meta / '_clientify_gdpr_accept') para el resto del plugin.
+		$suscripcion = self::get_block_checkout_gdpr_consent( $order );
+		if ( $suscripcion === null ) {
 			return;
 		}
 
-		$suscripcion = $gdpr_value ? 'accept' : 'revoke';
-
+		$user_id = $order->get_customer_id();
 		if ( $user_id ) {
 			update_user_meta( $user_id, 'suscripcion_newsletter', $suscripcion );
 		}
@@ -1669,6 +1706,12 @@ function agregar_opcion_suscripcion($menu_items) {
 							$contact['gdpr_accept'] = "accept";
 						}
 					}
+					if ($contact) {
+						$block_consent = self::get_block_checkout_gdpr_consent( $order );
+						if ( $block_consent !== null ) {
+							$contact['gdpr_accept'] = $block_consent;
+						}
+					}
 				}else{
 					if ( $order->get_billing_first_name() || $order->get_billing_last_name() ) {
 						$customer_phones = array();
@@ -1775,11 +1818,16 @@ function agregar_opcion_suscripcion($menu_items) {
 					$contact['email'] = $order->get_billing_email();
 				}
 
-				// GDPR para contactos guest: leer del order meta guardado por block checkout
+				// GDPR para contactos guest: leer del order meta guardado por el checkout classic
 				if ( is_array($contact) && !$id_customer ) {
 					$order_gdpr = $order->get_meta( '_clientify_gdpr_accept' );
 					if ( ! empty( $order_gdpr ) ) {
 						$contact['gdpr_accept'] = $order_gdpr;
+					}
+					// GDPR para invitados en checkout por bloques (WooCommerce Blocks / Store API)
+					$block_consent = self::get_block_checkout_gdpr_consent( $order );
+					if ( $block_consent !== null ) {
+						$contact['gdpr_accept'] = $block_consent;
 					}
 				}
 

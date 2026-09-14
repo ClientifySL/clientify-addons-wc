@@ -74,7 +74,7 @@ class Clientify_Addons_Activator
         /* set default time Abandoned Card  */
         update_option('CLIENTIFY_STATUS', 0);
         update_option('CLIENTIFY_GDPR', 0);
-        update_option('CLIENTIFY_GDPR_TEXT', "Acepto recibir comunicaciones comerciales GDPR");
+        update_option('CLIENTIFY_GDPR_TEXT', "Acepto el envío de comunicaciones comerciales y promociones. ");
         $order_status = array("wc-completed", "wc-processing", "wc-on-hold");
         update_option('CLIENTIFY_ORDER_STATUS', $order_status);
 
