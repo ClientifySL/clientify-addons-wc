@@ -375,7 +375,8 @@ class Clientify_Plugin_Core
 				}
 
 				if ( !empty($customer_meta['billing_phone'][0]) && !in_array($customer_meta['billing_phone'][0], $customer_phones ) ) {
-					$data['phones'][] = array('phone' => $customer_meta['billing_phone'][0]);
+					$normalized_phone = Clientify_Helper::normalize_phone( $customer_meta['billing_phone'][0], $billing_country_code );
+					$data['phones'][] = array('phone' => $normalized_phone);
 					$customer_phones[] = $customer_meta['billing_phone'][0];
 				}
 			}
@@ -778,7 +779,8 @@ class Clientify_Plugin_Core
 				}
 
 				if ( !empty($customer_meta['billing_phone'][0]) && !in_array($customer_meta['billing_phone'][0], $customer_phones) ) {
-					$data['phones'][] = array('phone' => $customer_meta['billing_phone'][0]);
+					$normalized_phone = Clientify_Helper::normalize_phone( $customer_meta['billing_phone'][0], !empty( $customer_meta['billing_country'][0] ) ? $customer_meta['billing_country'][0] : '' );
+					$data['phones'][] = array('phone' => $normalized_phone);
 					$customer_phones[] = $customer_meta['billing_phone'][0];
 				}
 				//} elseif ( $woocommerce->customer->get_address() ) {
@@ -814,7 +816,8 @@ class Clientify_Plugin_Core
 					$data['company'] = $woocommerce->customer->get_billing_company();
 				}
 				if ( !empty($woocommerce->customer->get_billing_phone()) && !in_array($woocommerce->customer->get_billing_phone(), $customer_phones) ) {
-					$data['phones'][] = array( 'phone' => $woocommerce->customer->get_billing_phone() );
+					$normalized_phone = Clientify_Helper::normalize_phone( $woocommerce->customer->get_billing_phone(), $woocommerce->customer->get_billing_country() );
+					$data['phones'][] = array( 'phone' => $normalized_phone );
 					$customer_phones[] = $woocommerce->customer->get_billing_phone();
 				}
 			}
@@ -903,11 +906,14 @@ class Clientify_Plugin_Core
 		// Este hook legado ('woocommerce_review_order_before_submit') tambien lo
 		// ejecuta WooCommerce Blocks por compatibilidad, duplicando el checkbox
 		// nativo que ya registramos via register_block_checkout_gdpr_field()
-		// (location 'contact'). Desde WC 8.9 esa API de campos adicionales se
-		// renderiza tanto en el checkout por bloques como en el shortcode
-		// clasico, asi que si esta disponible no pintamos este checkbox suelto
-		// para evitar el duplicado.
-		if ( function_exists( 'woocommerce_register_additional_checkout_field' ) ) {
+		// (location 'contact'). Esa API de campos adicionales solo se renderiza
+		// automaticamente en el checkout POR BLOQUES, no en el shortcode clasico
+		// [woocommerce_checkout] - ahi seguimos necesitando este checkbox suelto.
+		if (
+			function_exists( 'woocommerce_register_additional_checkout_field' )
+			&& class_exists( '\Automattic\WooCommerce\Blocks\Utils\CartCheckoutUtils' )
+			&& \Automattic\WooCommerce\Blocks\Utils\CartCheckoutUtils::is_checkout_block_default()
+		) {
 			return;
 		}
     ?>
@@ -1755,7 +1761,8 @@ function agregar_opcion_suscripcion($menu_items) {
 						}
 						$contact['addresses'][] = $customer_address;
 						if ( !empty($order->get_billing_phone()) && !in_array($order->get_billing_phone(), $customer_phones ) ) {
-							$contact['phones'][] = array('phone' => $order->get_billing_phone());
+							$normalized_phone = Clientify_Helper::normalize_phone( $order->get_billing_phone(), $order->get_billing_country() );
+							$contact['phones'][] = array('phone' => $normalized_phone);
 							$customer_phones[] = $order->get_billing_phone();
 						}
 						if ( !empty($lang) ) {
