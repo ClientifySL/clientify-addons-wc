@@ -4,7 +4,7 @@ Tags: woocommerce, clientify, integration, CRM, ecommerce
 Requires at least: 4.0
 Tested up to: 6.2.2
 Requires PHP: 7.4.2
-Stable tag: 1.1.3
+Stable tag: 1.1.4
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,11 @@ directory take precedence. For example, `/assets/screenshot-1.png` would win ove
 2. This is the second screen shot
 
 == Changelog ==
+
+= 1.1.4 =
+* Fix: se sincroniza el consentimiento GDPR en el checkout por bloques y se unifica la opcion de texto.
+* Fix: se muestra el checkbox de GDPR legado tambien en el checkout clasico.
+* Fix: se preserva el codigo de marcacion internacional (dial code) en widgets de telefono que lo separan del numero.
 
 = 1.0 =
 * A change since the previous version.
