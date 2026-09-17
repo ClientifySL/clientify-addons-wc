@@ -121,7 +121,7 @@ jQuery(document).ready(function () {
 						 orderProcess = $("#CLIENTIFY_ORDER_STATUS_names").val(),
 						 api = $("#api").val(),
 						 gdpr_status = $('#clientify_gdpr_check').is(':checked') ? 1 : 0,
-						 gdpr_text = $('#clientify_gdpr_text').val().trim() || 'Acepto recibir comunicaciones comerciales GDPR',
+						 gdpr_text = $('#clientify_gdpr_text').val().trim() || 'Acepto el envío de comunicaciones comerciales y promociones. ',
 						 res = 0;
 		btnconnect.attr("disabled", true).text(btnconnect.data("loading-text"));
 		if ( $("#key").val() === "" ) {
@@ -150,6 +150,12 @@ jQuery(document).ready(function () {
 					showAdminNotice(res.message, 'success');
 					btnconnect.attr("disabled", true).text("Conectado").addClass('connected');
 					sessionStorage.setItem('clientify_notice', JSON.stringify({ message: res.message, type: 'success' }));
+					// El servidor ya guardo gdpr_text (con su valor por defecto si venia vacio).
+					// Reflejamos ese mismo valor en el input antes de reenviar el formulario de
+					// WordPress (options.php), para que esa segunda peticion no lo sobreescriba con vacio.
+					if ( $('#clientify_gdpr_text').val().trim() === '' ) {
+						$('#clientify_gdpr_text').val(gdpr_text);
+					}
 					form.submit();
 					if (res.open_url) { window.open(res.open_url, '_blank'); }
 				} else {

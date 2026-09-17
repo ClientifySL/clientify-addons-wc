@@ -258,6 +258,35 @@ class Clientify_Helper {
 		);
 	}
 
+	/**
+	 * Normalize a phone number for sending to the Clientify API.
+	 *
+	 * Trusts whatever the checkout phone widget already stored in
+	 * billing_phone (e.g. intl-tel-input's E.164 value). Only cosmetic
+	 * normalization is applied ("00" prefix -> "+"); the country/dial code
+	 * is NEVER guessed from the billing address, since the phone's country
+	 * and the billing address's country are not guaranteed to match
+	 * (e.g. a customer billing to Spain with a Venezuelan phone number).
+	 *
+	 * @param  string $phone        Raw phone number.
+	 * @param  string $country_code Unused, kept for call-site compatibility.
+	 * @return string Normalized phone number.
+	 */
+	public static function normalize_phone( $phone, $country_code = '' ) {
+
+		$phone = trim( (string) $phone );
+
+		if ( '' === $phone ) {
+			return $phone;
+		}
+
+		if ( 0 === strpos( $phone, '00' ) ) {
+			return '+' . substr( $phone, 2 );
+		}
+
+		return $phone;
+	}
+
 	// Function to delete old logs	
 	function delete_old_logs($params) {
 		global$wpdb;

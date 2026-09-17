@@ -43,7 +43,7 @@ class Clientify_Plugin_Core
 		//register our settings
 		register_setting('clientify-settings-group', 'CLIENTIFY_API_KEY');
 		register_setting('clientify-settings-gdpr', 'CLIENTIFY_GDPR', 0);
-		register_setting('clientify-settings-gdpr_text', 'CLIENTIFY_GDPR_text');
+		register_setting('clientify-settings-group', 'CLIENTIFY_GDPR_TEXT');
 		register_setting('clientify-settings-group', 'CLIENTIFY_API_LOG');
 		register_setting('clientify-settings-script', 'CLIENTIFY_SCRIPT', 0);
 		register_setting('clientify-settings-group', 'CLIENTIFY_BOTTOM_SCRIPT');
@@ -80,10 +80,10 @@ class Clientify_Plugin_Core
 		$gdpr_status   = isset( $_POST['gdpr_status'] ) ? intval( $_POST['gdpr_status'] ) : 0;
 		$gdpr_text     = sanitize_text_field( isset( $_POST['gdpr_text'] ) ? $_POST['gdpr_text'] : '' );
 		if ( empty( $gdpr_text ) ) {
-			$gdpr_text = 'Acepto recibir comunicaciones comerciales GDPR';
+			$gdpr_text = 'Acepto el envío de comunicaciones comerciales y promociones. (Opcional)';
 		}
 		update_option( 'CLIENTIFY_ORDER_STATUS', $order_process );
-		update_option( 'clientify_gdpr_text', $gdpr_text );
+		update_option( 'CLIENTIFY_GDPR_TEXT', $gdpr_text );
 		update_option( 'CLIENTIFY_GDPR', $gdpr_status );
 
 		$endpoint_class = new Clientify_Endpoint();
@@ -375,7 +375,8 @@ class Clientify_Plugin_Core
 				}
 
 				if ( !empty($customer_meta['billing_phone'][0]) && !in_array($customer_meta['billing_phone'][0], $customer_phones ) ) {
-					$data['phones'][] = array('phone' => $customer_meta['billing_phone'][0]);
+					$normalized_phone = Clientify_Helper::normalize_phone( $customer_meta['billing_phone'][0], $billing_country_code );
+					$data['phones'][] = array('phone' => $normalized_phone);
 					$customer_phones[] = $customer_meta['billing_phone'][0];
 				}
 			}
@@ -388,6 +389,32 @@ class Clientify_Plugin_Core
 	 * @since    1.1.0
 	 * @param    int                  $user_id    The custommer's id number.
 	 */
+	/**
+	 * Fix billing_phone in $_POST at the earliest checkout hook available,
+	 * before WooCommerce copies it into the order, the WC_Customer object,
+	 * and the user meta. This is the single source-of-truth fix: once
+	 * $_POST['billing_phone'] itself is correct, the order object, the
+	 * logged-in user's billing_phone meta, and WC()->customer all end up
+	 * correct too, without needing per-consumer patches.
+	 *
+	 * No-op when the checkout doesn't submit a "full_phone_number" field
+	 * (i.e. sites not using a split-dial-code phone widget), so it can't
+	 * affect any other client's checkout.
+	 *
+	 * @since 1.x
+	 */
+	function fix_split_phone_prefix() {
+		if ( empty( $_POST['full_phone_number'] ) ) {
+			return;
+		}
+
+		$full_phone_number = sanitize_text_field( wp_unslash( $_POST['full_phone_number'] ) );
+
+		if ( preg_match( '/^\+[1-9]\d{1,14}$/', $full_phone_number ) ) {
+			$_POST['billing_phone'] = $full_phone_number;
+		}
+	}
+
 	function customer_add($user_id)
 	{
 		//if ( is_plugin_active('woocommerce/woocommerce.php') && !is_admin() ) {
@@ -778,7 +805,8 @@ class Clientify_Plugin_Core
 				}
 
 				if ( !empty($customer_meta['billing_phone'][0]) && !in_array($customer_meta['billing_phone'][0], $customer_phones) ) {
-					$data['phones'][] = array('phone' => $customer_meta['billing_phone'][0]);
+					$normalized_phone = Clientify_Helper::normalize_phone( $customer_meta['billing_phone'][0], !empty( $customer_meta['billing_country'][0] ) ? $customer_meta['billing_country'][0] : '' );
+					$data['phones'][] = array('phone' => $normalized_phone);
 					$customer_phones[] = $customer_meta['billing_phone'][0];
 				}
 				//} elseif ( $woocommerce->customer->get_address() ) {
@@ -814,7 +842,8 @@ class Clientify_Plugin_Core
 					$data['company'] = $woocommerce->customer->get_billing_company();
 				}
 				if ( !empty($woocommerce->customer->get_billing_phone()) && !in_array($woocommerce->customer->get_billing_phone(), $customer_phones) ) {
-					$data['phones'][] = array( 'phone' => $woocommerce->customer->get_billing_phone() );
+					$normalized_phone = Clientify_Helper::normalize_phone( $woocommerce->customer->get_billing_phone(), $woocommerce->customer->get_billing_country() );
+					$data['phones'][] = array( 'phone' => $normalized_phone );
 					$customer_phones[] = $woocommerce->customer->get_billing_phone();
 				}
 			}
@@ -863,31 +892,60 @@ class Clientify_Plugin_Core
 		}
 
 	}
-	function guardar_campo_suscripcion_checkout() {
+	function guardar_campo_suscripcion_checkout( $order_id ) {
 		$user_id = get_current_user_id();
 
-		if ( ! $user_id ) {
-			return;
+		$suscripcion = null;
+		if ( isset( $_POST['suscripcion_newsletter'] ) ) {
+			$suscripcion = 'accept';
+		} elseif ( isset( $_POST['mailchimp_woocommerce_newsletter'] ) ) {
+			$suscripcion = $_POST['mailchimp_woocommerce_newsletter'] == '1' ? 'accept' : 'revoke';
 		}
 
-		if ( isset( $_POST['suscripcion_newsletter'] ) ) {
-			update_user_meta( $user_id, 'suscripcion_newsletter', 'accept' );
-		} elseif ( isset( $_POST['mailchimp_woocommerce_newsletter'] ) ) {
-			update_user_meta( $user_id, 'suscripcion_newsletter', $_POST['mailchimp_woocommerce_newsletter'] == '1' ? 'accept' : 'revoke' );
-		}
 		// Si el checkbox no viene en el POST no es una revocacion explicita del
 		// cliente (el checkbox se pinta sin marcar en cada checkout y no se
 		// reenvia si no se toca) - no tocar el consentimiento ya guardado.
+		if ( $suscripcion === null ) {
+			return;
+		}
+
+		if ( $user_id ) {
+			update_user_meta( $user_id, 'suscripcion_newsletter', $suscripcion );
+		}
+
+		// Guardar tambien en el meta del pedido para invitados (checkout classic),
+		// ya que la sincronizacion de contactos de invitados lee '_clientify_gdpr_accept'
+		// del pedido, no del user_meta (que no existe sin cuenta).
+		if ( $order_id ) {
+			$order = wc_get_order( $order_id );
+			if ( $order ) {
+				$order->update_meta_data( '_clientify_gdpr_accept', $suscripcion );
+				$order->save();
+			}
+		}
 	}
 
 	function agregar_checkbox_despues_privacidad() {
 		if ( self::detect_external_gdpr_plugin() || self::detect_newsletter_plugin() ) {
 			return;
 		}
+		// Este hook legado ('woocommerce_review_order_before_submit') tambien lo
+		// ejecuta WooCommerce Blocks por compatibilidad, duplicando el checkbox
+		// nativo que ya registramos via register_block_checkout_gdpr_field()
+		// (location 'contact'). Esa API de campos adicionales solo se renderiza
+		// automaticamente en el checkout POR BLOQUES, no en el shortcode clasico
+		// [woocommerce_checkout] - ahi seguimos necesitando este checkbox suelto.
+		if (
+			function_exists( 'woocommerce_register_additional_checkout_field' )
+			&& class_exists( '\Automattic\WooCommerce\Blocks\Utils\CartCheckoutUtils' )
+			&& \Automattic\WooCommerce\Blocks\Utils\CartCheckoutUtils::is_checkout_block_default()
+		) {
+			return;
+		}
     ?>
     <div class="form-row additional-terms">
         <label class="woocommerce-form__label woocommerce-form__label-for-checkbox checkbox">
-            <input type="checkbox" class="woocommerce-form__input woocommerce-form__input-checkbox input-checkbox" name="suscripcion_newsletter" id="suscripcion_newsletter" /> <span><?php _e(get_option('CLIENTIFY_GDPR_TEXT'), 'woocommerce'); ?></span>
+            <input type="checkbox" class="woocommerce-form__input woocommerce-form__input-checkbox input-checkbox" name="suscripcion_newsletter" id="suscripcion_newsletter" /> <span><?php echo esc_html( get_option( 'CLIENTIFY_GDPR_TEXT' ) ); ?></span>
         </label>
     </div>
     <?php
@@ -1120,16 +1178,36 @@ class Clientify_Plugin_Core
 		return null;
 	}
 
+	/**
+	 * Lee el consentimiento GDPR guardado de forma nativa por WooCommerce Blocks
+	 * (checkout por bloques / Store API) para el campo adicional registrado en
+	 * register_block_checkout_gdpr_field(). WooCommerce persiste automaticamente
+	 * el valor en el meta del pedido con el prefijo '_wc_other/' + el id del campo.
+	 *
+	 * @param WC_Order $order
+	 * @return string|null 'accept', 'revoke' o null si el campo no viene en el pedido.
+	 */
+	static function get_block_checkout_gdpr_consent( $order ) {
+		if ( ! $order ) {
+			return null;
+		}
+		$raw = $order->get_meta( '_wc_other/clientify-addons/gdpr_consent' );
+		if ( $raw === '' || $raw === null ) {
+			return null;
+		}
+		return in_array( (string) $raw, array( '1', 'yes', 'true' ), true ) ? 'accept' : 'revoke';
+	}
+
 	function register_block_checkout_gdpr_field() {
 		if ( self::detect_external_gdpr_plugin() || self::detect_newsletter_plugin() ) {
 			return;
 		}
 		// WC 8.9+: native additional checkout fields (handles UI automatically)
-		if ( function_exists( 'woocommerce_register_additional_checkout_fields' ) ) {
-			woocommerce_register_additional_checkout_fields( array(
+		if ( function_exists( 'woocommerce_register_additional_checkout_field' ) ) {
+			woocommerce_register_additional_checkout_field( array(
 				'id'       => 'clientify-addons/gdpr_consent',
-				'label'    => get_option( 'CLIENTIFY_GDPR_TEXT', __( 'Acepto recibir comunicaciones comerciales GDPR', 'clientify-addons' ) ),
-				'location' => 'order',
+				'label'    => get_option( 'CLIENTIFY_GDPR_TEXT' ),
+				'location' => 'contact',
 				'type'     => 'checkbox',
 				'required' => false,
 			) );
@@ -1164,7 +1242,7 @@ class Clientify_Plugin_Core
 			return;
 		}
 		// Only needed when NOT using the WC 8.9+ native additional fields API
-		if ( function_exists( 'woocommerce_register_additional_checkout_fields' ) ) {
+		if ( function_exists( 'woocommerce_register_additional_checkout_field' ) ) {
 			return;
 		}
 		wp_enqueue_script(
@@ -1175,32 +1253,23 @@ class Clientify_Plugin_Core
 			true
 		);
 		wp_localize_script( 'clientify-gdpr-blocks', 'clientify_gdpr_params', array(
-			'gdpr_text'       => get_option( 'CLIENTIFY_GDPR_TEXT', __( 'Acepto recibir comunicaciones comerciales GDPR', 'clientify-addons' ) ),
+			'gdpr_text'       => get_option( 'CLIENTIFY_GDPR_TEXT', __( 'Acepto el envío de comunicaciones comerciales y promociones. (Opcional)', 'clientify-addons' ) ),
 			'external_plugin' => self::detect_external_gdpr_plugin(),
 		) );
 	}
 
 	function save_block_checkout_gdpr( $order, $request ) {
-		$user_id    = $order->get_customer_id();
-		$gdpr_value = null;
-
-		if ( function_exists( 'woocommerce_get_checkout_field_value_from_request' ) ) {
-			$gdpr_value = woocommerce_get_checkout_field_value_from_request( $request, 'clientify-addons/gdpr_consent' );
-		}
-
-		if ( $gdpr_value === null ) {
-			$extensions = $request->get_param( 'extensions' );
-			if ( isset( $extensions['clientify-addons']['gdpr_consent'] ) ) {
-				$gdpr_value = (bool) $extensions['clientify-addons']['gdpr_consent'];
-			}
-		}
-
-		if ( $gdpr_value === null ) {
+		// WooCommerce persiste el campo adicional 'clientify-addons/gdpr_consent' de
+		// forma nativa en el meta del pedido (prefijo '_wc_other/') una vez registrado
+		// vía woocommerce_register_additional_checkout_field(). Lo leemos con el mismo
+		// helper que usa la sincronización, y lo espejamos a nuestras claves propias
+		// (user_meta / '_clientify_gdpr_accept') para el resto del plugin.
+		$suscripcion = self::get_block_checkout_gdpr_consent( $order );
+		if ( $suscripcion === null ) {
 			return;
 		}
 
-		$suscripcion = $gdpr_value ? 'accept' : 'revoke';
-
+		$user_id = $order->get_customer_id();
 		if ( $user_id ) {
 			update_user_meta( $user_id, 'suscripcion_newsletter', $suscripcion );
 		}
@@ -1669,6 +1738,12 @@ function agregar_opcion_suscripcion($menu_items) {
 							$contact['gdpr_accept'] = "accept";
 						}
 					}
+					if ($contact) {
+						$block_consent = self::get_block_checkout_gdpr_consent( $order );
+						if ( $block_consent !== null ) {
+							$contact['gdpr_accept'] = $block_consent;
+						}
+					}
 				}else{
 					if ( $order->get_billing_first_name() || $order->get_billing_last_name() ) {
 						$customer_phones = array();
@@ -1712,7 +1787,8 @@ function agregar_opcion_suscripcion($menu_items) {
 						}
 						$contact['addresses'][] = $customer_address;
 						if ( !empty($order->get_billing_phone()) && !in_array($order->get_billing_phone(), $customer_phones ) ) {
-							$contact['phones'][] = array('phone' => $order->get_billing_phone());
+							$normalized_phone = Clientify_Helper::normalize_phone( $order->get_billing_phone(), $order->get_billing_country() );
+							$contact['phones'][] = array('phone' => $normalized_phone);
 							$customer_phones[] = $order->get_billing_phone();
 						}
 						if ( !empty($lang) ) {
@@ -1775,11 +1851,16 @@ function agregar_opcion_suscripcion($menu_items) {
 					$contact['email'] = $order->get_billing_email();
 				}
 
-				// GDPR para contactos guest: leer del order meta guardado por block checkout
+				// GDPR para contactos guest: leer del order meta guardado por el checkout classic
 				if ( is_array($contact) && !$id_customer ) {
 					$order_gdpr = $order->get_meta( '_clientify_gdpr_accept' );
 					if ( ! empty( $order_gdpr ) ) {
 						$contact['gdpr_accept'] = $order_gdpr;
+					}
+					// GDPR para invitados en checkout por bloques (WooCommerce Blocks / Store API)
+					$block_consent = self::get_block_checkout_gdpr_consent( $order );
+					if ( $block_consent !== null ) {
+						$contact['gdpr_accept'] = $block_consent;
 					}
 				}
 
@@ -2463,6 +2544,10 @@ function agregar_opcion_suscripcion($menu_items) {
 				'default'  => '',
 				'sanitize' => 'FILTER_SANITIZE_STRING',
 			),
+			'wcf_full_phone_number'   => array(
+				'default'  => '',
+				'sanitize' => 'FILTER_SANITIZE_STRING',
+			),
 			'wcf_country'             => array(
 				'default'  => '',
 				'sanitize' => 'FILTER_SANITIZE_STRING',
@@ -2545,6 +2630,14 @@ function agregar_opcion_suscripcion($menu_items) {
 			
 			$current_time = current_time( 'Y-m-d H:i:s' );
 
+			// Prefer the E.164 value from the widget's hidden "full_phone_number"
+			// field (same source used for orders) over the dial-code-scraped one,
+			// since DOM scraping can miss the dial code depending on widget timing.
+			$wcf_phone = $post_data['wcf_phone'];
+			if ( ! empty( $post_data['wcf_full_phone_number'] ) && preg_match( '/^\+[1-9]\d{1,14}$/', $post_data['wcf_full_phone_number'] ) ) {
+				$wcf_phone = $post_data['wcf_full_phone_number'];
+			}
+
 			$other_fields = array(
 				'wcf_billing_company'     => $post_data['wcf_billing_company'],
 				'wcf_billing_address_1'   => $post_data['wcf_billing_address_1'],
@@ -2563,7 +2656,7 @@ function agregar_opcion_suscripcion($menu_items) {
 				'wcf_order_comments'      => $post_data['wcf_order_comments'],
 				'wcf_first_name'          => $post_data['wcf_name'],
 				'wcf_last_name'           => $post_data['wcf_surname'],
-				'wcf_phone_number'        => $post_data['wcf_phone'],
+				'wcf_phone_number'        => $wcf_phone,
 				'wcf_location'            => $post_data['wcf_country'] . ', ' . $post_data['wcf_city'],
 				'wcf_shipping_cost'       => $shipping_cost
 			);

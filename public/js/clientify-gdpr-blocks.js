@@ -9,7 +9,7 @@
 		return (
 			window.clientify_gdpr_params && clientify_gdpr_params.gdpr_text
 				? clientify_gdpr_params.gdpr_text
-				: 'Acepto recibir comunicaciones comerciales GDPR'
+				: 'Acepto el envío de comunicaciones comerciales y promociones. '
 		);
 	}
 
