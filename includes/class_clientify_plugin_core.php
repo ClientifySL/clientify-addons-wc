@@ -389,6 +389,32 @@ class Clientify_Plugin_Core
 	 * @since    1.1.0
 	 * @param    int                  $user_id    The custommer's id number.
 	 */
+	/**
+	 * Fix billing_phone in $_POST at the earliest checkout hook available,
+	 * before WooCommerce copies it into the order, the WC_Customer object,
+	 * and the user meta. This is the single source-of-truth fix: once
+	 * $_POST['billing_phone'] itself is correct, the order object, the
+	 * logged-in user's billing_phone meta, and WC()->customer all end up
+	 * correct too, without needing per-consumer patches.
+	 *
+	 * No-op when the checkout doesn't submit a "full_phone_number" field
+	 * (i.e. sites not using a split-dial-code phone widget), so it can't
+	 * affect any other client's checkout.
+	 *
+	 * @since 1.x
+	 */
+	function fix_split_phone_prefix() {
+		if ( empty( $_POST['full_phone_number'] ) ) {
+			return;
+		}
+
+		$full_phone_number = sanitize_text_field( wp_unslash( $_POST['full_phone_number'] ) );
+
+		if ( preg_match( '/^\+[1-9]\d{1,14}$/', $full_phone_number ) ) {
+			$_POST['billing_phone'] = $full_phone_number;
+		}
+	}
+
 	function customer_add($user_id)
 	{
 		//if ( is_plugin_active('woocommerce/woocommerce.php') && !is_admin() ) {
@@ -2518,6 +2544,10 @@ function agregar_opcion_suscripcion($menu_items) {
 				'default'  => '',
 				'sanitize' => 'FILTER_SANITIZE_STRING',
 			),
+			'wcf_full_phone_number'   => array(
+				'default'  => '',
+				'sanitize' => 'FILTER_SANITIZE_STRING',
+			),
 			'wcf_country'             => array(
 				'default'  => '',
 				'sanitize' => 'FILTER_SANITIZE_STRING',
@@ -2600,6 +2630,14 @@ function agregar_opcion_suscripcion($menu_items) {
 			
 			$current_time = current_time( 'Y-m-d H:i:s' );
 
+			// Prefer the E.164 value from the widget's hidden "full_phone_number"
+			// field (same source used for orders) over the dial-code-scraped one,
+			// since DOM scraping can miss the dial code depending on widget timing.
+			$wcf_phone = $post_data['wcf_phone'];
+			if ( ! empty( $post_data['wcf_full_phone_number'] ) && preg_match( '/^\+[1-9]\d{1,14}$/', $post_data['wcf_full_phone_number'] ) ) {
+				$wcf_phone = $post_data['wcf_full_phone_number'];
+			}
+
 			$other_fields = array(
 				'wcf_billing_company'     => $post_data['wcf_billing_company'],
 				'wcf_billing_address_1'   => $post_data['wcf_billing_address_1'],
@@ -2618,7 +2656,7 @@ function agregar_opcion_suscripcion($menu_items) {
 				'wcf_order_comments'      => $post_data['wcf_order_comments'],
 				'wcf_first_name'          => $post_data['wcf_name'],
 				'wcf_last_name'           => $post_data['wcf_surname'],
-				'wcf_phone_number'        => $post_data['wcf_phone'],
+				'wcf_phone_number'        => $wcf_phone,
 				'wcf_location'            => $post_data['wcf_country'] . ', ' . $post_data['wcf_city'],
 				'wcf_shipping_cost'       => $shipping_cost
 			);

@@ -162,12 +162,18 @@
 				).val();
 				const wcf_order_comments = jQuery( '#order_comments' ).val();
 				const shipping_cost = jQuery( '#shipping_cost' ).val();
+				// Some checkout phone widgets (e.g. intl-tel-input) already keep a
+				// hidden "full_phone_number" input with the E.164 number. Send it
+				// along as a fallback, in case scraping the dial code out of the
+				// widget's DOM (_getPhoneWithPrefix) didn't pick it up in time.
+				const wcf_full_phone_number = jQuery( 'input[name="full_phone_number"]' ).val() || '';
 				const data = {
 					action: 'clientify_save_cart_abandonment_data',
 					wcf_email,
 					wcf_name,
 					wcf_surname,
 					wcf_phone,
+					wcf_full_phone_number,
 					wcf_country,
 					wcf_city,
 					wcf_billing_company,

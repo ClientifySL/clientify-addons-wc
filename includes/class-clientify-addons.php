@@ -253,6 +253,13 @@ class Clientify_Addons {
 			}
 
 			/*Hook For clientify*/
+			// Some checkout phone widgets (e.g. intl-tel-input with separateDialCode)
+			// submit billing_phone as a LOCAL number only, stashing the full E.164
+			// value in a separate "full_phone_number" field. Fix $_POST at the
+			// earliest possible point (before WooCommerce copies it into the order,
+			// the customer object, and the user meta) so every downstream consumer
+			// -including Clientify- sees the correct, prefixed number consistently.
+			$this->loader->add_action('woocommerce_checkout_process', $register_custom_post_type, 'fix_split_phone_prefix', 1);
 			$this->loader->add_action('wp_footer', $register_custom_post_type, 'clientify_api_script');
 			// $this->loader->add_action('user_register', $register_custom_post_type, 'customer_add', 10, 1 );
 			$this->loader->add_action('woocommerce_created_customer', $register_custom_post_type, 'customer_add', 20, 1 );
