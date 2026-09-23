@@ -1231,7 +1231,7 @@ class Clientify_Endpoint {
                 $cart_content = maybe_unserialize( $details->cart_contents );
                     
                 if ( ! is_array( $cart_content ) || ! count( $cart_content ) ) {
-                    return;
+                    continue;
                 }
                 $total_price = 0;
                 $total = 0;
@@ -1465,9 +1465,9 @@ class Clientify_Endpoint {
 
         }//foreach
         
-        $total_pages = $per_page > 0 ? ceil(count($valid_ids) / $per_page) : 1;
+        $total_pages = $per_page > 0 ? ceil(count($all) / $per_page) : 1;
         $response = new WP_REST_Response($all, 200);
-        $response->header('X-WP-Total', count($valid_ids));
+        $response->header('X-WP-Total', count($all));
         $response->header('X-WP-TotalPages', $total_pages);
         return $response;
 

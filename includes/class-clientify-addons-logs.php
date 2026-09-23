@@ -66,9 +66,6 @@ class Clientify_Addons_Logs {
         private static $handling_error = false;
 
         public static function handle_errors_php($errno, $errstr, $errfile, $errline) {
-            if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
-                return false; // Never interfere with REST API responses
-            }
             if (!self::is_plugin_file($errfile)) {
                 return false; // Ignorar si no es de nuestro plugin
             }
@@ -79,6 +76,11 @@ class Clientify_Addons_Logs {
             $level = self::get_error_level($errno);
             self::insert_log($level, $errstr, $errfile, $errline);
             self::$handling_error = false;
+
+            if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
+                // Ya quedó registrado; dejamos que WP/PHP maneje la respuesta REST sin interferir.
+                return false;
+            }
             return true; // Indicar a PHP que el error fue manejado — no imprimir al output
         }
         /**
@@ -96,9 +98,6 @@ class Clientify_Addons_Logs {
          * Handle PHP fatal errors..
          */
         public static function handling_fatal_errors() {
-            if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
-                return;
-            }
             $error = error_get_last();
             if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR])) {
                 if (!self::is_plugin_file($error['file'])) {
