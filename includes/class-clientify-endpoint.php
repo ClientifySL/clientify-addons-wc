@@ -99,6 +99,12 @@ class Clientify_Endpoint {
             'callback' => array($this, 'sync_abandoned_cart'),
         ));
 
+        register_rest_route('clientify/v1', '/clean_abandoned', array(
+            'methods' => 'POST',
+            'permission_callback' => array($this, 'privileged_permission_callback'),
+            'callback' => array($this, 'clean_abandoned_carts'),
+        ));
+
         register_rest_route('clientify/v1', '/sync_contacts', array(
             'methods' => 'GET',
             'permission_callback' => array($this, 'privileged_permission_callback'),
@@ -1515,256 +1521,323 @@ class Clientify_Endpoint {
         $helper = new Clientify_Helper();
 
         foreach ( $abandoned_carts as $abandoned_cart ) {
-            if ($abandoned_cart->session_id)  {
-                $details          = $helper->get_checkout_details( $abandoned_cart->session_id );   
-                $user_details     = (object) maybe_unserialize( $details->other_fields );
-                $token_data       = array( 'wcf_session_id' => $details->session_id );
-                $items = array();
-                $cart_content = maybe_unserialize( $details->cart_contents );
-                    
-                if ( ! is_array( $cart_content ) || ! count( $cart_content ) ) {
-                    return;
-                }
-                $total_price = 0;
-                $total = 0;
-                $discount = 0;
-                $tax = 0;
-
-                foreach ($cart_content as $cart_item) {
-                
-                    $discount = $discount + ( floatval($cart_item['line_subtotal']) - floatval($cart_item['line_total']) );
-                    $total = $total + floatval($cart_item['line_subtotal']);
-                    $tax = $tax + floatval($cart_item['line_tax']);
-                    $shipping = 0 ;
-                    $product_id = $cart_item['product_id'];
-                    $categories = array();
-                    $subcategories= array();
-                    $terms = get_the_terms($product_id, 'product_cat');
-                    $join_categories = "";
-                    $join_subcategories = "";
-                    
-                    $product = wc_get_product($product_id);
-                    $price = $product->get_price();
-                    $total_price += $price;
-                    $without_reduction = $price;
-                    $discount = $without_reduction - $cart_item['line_total'];
-                
-                    if ( $price == 0 ) {
-                        $discount = 0;
-                    }else{
-                        $discount = round( ($discount / $without_reduction) * 100, 2);
-                    }
-                    if (!empty($terms)) {
-                        foreach ($terms as $term) {
-                            if ($term->parent == 0) {
-                                // Categoría principal
-                                if (!in_array($term->term_id, $categories)) {
-                                    $categories[] = $term->term_id;
-                                    $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->slug;
-                                }
-                            } else {
-                                // Subcategoría
-                                if (!in_array($term->term_id, $subcategories)) {
-                                    $subcategories[] = $term->term_id;
-                                    $parent_id = $term->parent;
-                                    
-                                    // Asegurarse de que la categoría principal esté añadida
-                                    if (!in_array($parent_id, $categories)) {
-                                        $parent_term = get_term($parent_id, 'product_cat');
-                                        $categories[] = $parent_id;
-                                        $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->slug;
-                                    }
-                        
-                                    // Construir la cadena de subcategorías
-                                    $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->slug . "|parent_id:" . $parent_id;
-                                }
-                            }
-                        }
-                    }
-                
-                    $price = $product->get_sale_price();
-                    $discount = $cart_item['line_subtotal'] - $cart_item['line_total'];
-                    $discount_val = ($discount <= 0) ? 0 : (($discount / $cart_item['line_subtotal']) * 100) ;
-                    
-                    if ( $cart_item['variation_id'] ) {
-                        $variable_product= new WC_Product_Variation( $cart_item['variation_id'] );
-
-                        if ( $variable_product->is_on_sale() ) {
-                            $price = $variable_product->get_sale_price();
-                        } else {
-                            $price = $variable_product->get_regular_price();
-                        }
-
-                        $description = '';
-                        $image_id  = $variable_product->image_id;
-                        $image_url = wp_get_attachment_image_url($image_id, 'full');
-   
-                        if ( empty($image_url) ) {
-                            $attachment_ids = $product->get_gallery_image_ids();
-                            if (!empty($attachment_ids)) {
-                                $first_image_id = reset($attachment_ids);
-                                $image_url = wp_get_attachment_url($first_image_id);
-                            }
-                        }
-                        if ( empty($variable_product->description) ) {
-                            // En caso de que la descripción sea vacía, obtener la descripción alternativa de $product
-                            $description = wp_strip_all_tags(str_replace(array("\r\n", "\r", "\n", "\t"), ' ', $product->get_description()));
-                        }
-                        else{
-                            $description = wp_strip_all_tags(str_replace(array("\r\n", "\r", "\n", "\t"), ' ', $variable_product->description));
-                        }
-
-                        $join_cat = $join_categories."/".$join_subcategories;
-                        
-                        $items[] = array(
-                            'name'        => $variable_product->get_name(),
-                            'description' => $description,
-                            'category'    => '',
-                            'sku'         => $variable_product->sku,
-                            'image_url'   => $image_url,
-                            'item_url'    => $product->get_permalink($cart_item),
-                            'price'       => number_format($price, 2, '.', ''),
-                            'quantity'    => (int) $cart_item['quantity'],
-                            'discount'    => $discount_val,
-                        );
-                    }
-                    else{  
-
-                        if ($product->is_on_sale()) {
-                            $price = $product->get_sale_price();
-                        } else {
-                            $price = $product->get_regular_price();
-                        }
-
-                        if ( $price == 0 ) {
-                            $discount = 0;
-                        }else{
-                            $discount = round( ($discount / $without_reduction) * 100, 2);
-                        }
-                       
-                        $join_cat = $join_categories."/".$join_subcategories;
-                        try {
-                            $sku = $product->get_sku();
-                        } catch (Exception $e) {
-                            $sku = '';
-                        }
-                        $items[] = array(
-                            'name'        => $product->get_title(),
-                            'description' => $product->get_description(),
-                            'category'    => $join_cat,
-                            'sku'         => $sku,
-                            'image_url'   => get_the_post_thumbnail_url($product_id),
-                            'item_url'    => $product->get_permalink($cart_item),
-                            'price'       => number_format($price, 2, '.', ''),
-                            'quantity'    => (int) $cart_item['quantity'],
-                            'discount'    => $discount_val,
-                        );
-                       
-                    } 
-                }
-                
-                if (isset($user_details->wcf_shipping_cost)) {
-                    $shipping = number_format($user_details->wcf_shipping_cost, 2, '.', '');
-                }
-            
-
-                $data = array(
-                            'status'         => 'abandoned',
-                            'abandoned_date' => date('Y-m-d', strtotime($details->time)),
-                            'ecommerce'      => 'woocommerce',
-                            'shop_name'      => get_option('blogname'),
-                            'order_url'      => $helper->get_checkout_url( $details->checkout_id, $token_data ),
-                            'currency'       => get_option('woocommerce_currency'),
-                            'store_url'      => $url_base,
-                            'products'       => $items,
-                            'price'          => $details->cart_total,
-                            'shipping'       => $shipping,
-                            'coupon'         =>  0,
-                            
-                        );
-                $lang = get_bloginfo("language");
-                $site_name = get_option('blogname');
-                $site_name_valid = empty( $site_name ) ? 'WordPress' : $site_name;
-
-                $data['contact'] = array(
-                                    'id_customer'     => '',
-                                    'email'           => $details->email,
-                                    'contact_source'  => get_option('blogname'),
-                                    'custom_field'   => [],
-                                    'tags'            => array(
-                                                            'woocommerce',
-                                                            $site_name_valid,
-                                                        )
-                                );
-                if ( !empty( $user_details->wcf_first_name ) ) {
-                    $data['contact']['first_name'] = $user_details->wcf_first_name;
-                }
-                if ( !empty($user_details->wcf_last_name) ) {
-                    $data['contact']['last_name'] = $user_details->wcf_last_name;
-                }
-                if ( !empty($lang) ) {
-                    $data['contact']['custom_field'] = array(
-                        'field' => 'ecommerce_language',
-                        'value' => $lang,
-                    );
-                }
-
-                $street = $user_details->wcf_billing_address_1 . $user_details->wcf_billing_address_2;
-                $city = $user_details->wcf_shipping_city;
-                $country = $user_details->wcf_shipping_country;
-                $postal_code = $user_details->wcf_billing_postcode;
-                $customer_address = array('type' => 1);
-
-                if ( $street ) {
-                    $customer_address['street'] = $street;
-                }
-                if ( $city ) {
-                    $customer_address['city'] = $city;
-                }
-                if ( $country ) {
-                    $customer_address['country'] = $country;
-                }
-                if ( $postal_code ) {
-                    $customer_address['postal_code'] = $postal_code;
-                }
-
-                if ( !empty($user_details->wcf_billing_state) ) {
-                    $customer_address['state'] = $user_details->wcf_billing_state;
-                    if ( empty($customer_address['state']) ) {
-                        unset($customer_address['state']);
-                    }
-                }
-                $data['contact']['addresses'][] = $customer_address;
-
-                if ( !empty($user_details->wcf_billing_company) ) {
-                    $data['contact']['company'] = $user_details->wcf_billing_company;
-                }
-
-                if ( !empty($user_details->wcf_phone_number) ) {
-                    if ( !isset($customer_phones) ) $customer_phones = array();
-                    $data['contact']['phones'][] = array('phone' => $user_details->wcf_phone_number);
-                    $customer_phones[] = $user_details->wcf_phone_number;
-                }
-
-
-                $data['cart_id'] = $abandoned_cart->id;
-                $data['order_id'] = $abandoned_cart->id;
-            
-
-               
-                 //Send data to Clientify
-                $abandoned = $api->post_order_clientify( $data );
-                $result_sync [] = $abandoned;
-
-                $all [] = $data;
-
+            $abandoned = $this->sync_one_abandoned_cart( $abandoned_cart, $helper, $url_base, $api );
+            if ( null !== $abandoned ) {
+                $result_sync[] = $abandoned;
+                $all[] = $abandoned_cart;
             }
-
         }//foreach
 
         //Send to api
         return $result_sync;
         
+    }
+
+    /**
+     * Build the Clientify payload for a single abandoned cart row and send it.
+     *
+     * @param object          $abandoned_cart Row with at least id, checkout_id, session_id.
+     * @param Clientify_Helper $helper
+     * @param string          $url_base
+     * @param Clientify_Api   $api
+     * @return mixed|null Api response, or null if the cart had no usable session/cart content.
+     */
+    private function sync_one_abandoned_cart( $abandoned_cart, $helper, $url_base, $api ) {
+        if ( empty( $abandoned_cart->session_id ) ) {
+            return null;
+        }
+
+        $details      = $helper->get_checkout_details( $abandoned_cart->session_id );
+        $user_details = (object) maybe_unserialize( $details->other_fields );
+        $token_data   = array( 'wcf_session_id' => $details->session_id );
+        $items        = array();
+        $cart_content = maybe_unserialize( $details->cart_contents );
+
+        if ( ! is_array( $cart_content ) || ! count( $cart_content ) ) {
+            return null;
+        }
+
+        $total_price = 0;
+        $total = 0;
+        $discount = 0;
+        $tax = 0;
+
+        foreach ($cart_content as $cart_item) {
+
+            $discount = $discount + ( floatval($cart_item['line_subtotal']) - floatval($cart_item['line_total']) );
+            $total = $total + floatval($cart_item['line_subtotal']);
+            $tax = $tax + floatval($cart_item['line_tax']);
+            $shipping = 0 ;
+            $product_id = $cart_item['product_id'];
+            $categories = array();
+            $subcategories= array();
+            $terms = get_the_terms($product_id, 'product_cat');
+            $join_categories = "";
+            $join_subcategories = "";
+
+            $product = wc_get_product($product_id);
+            $price = $product->get_price();
+            $total_price += $price;
+            $without_reduction = $price;
+            $discount = $without_reduction - $cart_item['line_total'];
+
+            if ( $price == 0 ) {
+                $discount = 0;
+            }else{
+                $discount = round( ($discount / $without_reduction) * 100, 2);
+            }
+            if (!empty($terms)) {
+                foreach ($terms as $term) {
+                    if ($term->parent == 0) {
+                        // Categoría principal
+                        if (!in_array($term->term_id, $categories)) {
+                            $categories[] = $term->term_id;
+                            $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->slug;
+                        }
+                    } else {
+                        // Subcategoría
+                        if (!in_array($term->term_id, $subcategories)) {
+                            $subcategories[] = $term->term_id;
+                            $parent_id = $term->parent;
+
+                            // Asegurarse de que la categoría principal esté añadida
+                            if (!in_array($parent_id, $categories)) {
+                                $parent_term = get_term($parent_id, 'product_cat');
+                                $categories[] = $parent_id;
+                                $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->slug;
+                            }
+
+                            // Construir la cadena de subcategorías
+                            $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->slug . "|parent_id:" . $parent_id;
+                        }
+                    }
+                }
+            }
+
+            $price = $product->get_sale_price();
+            $discount = $cart_item['line_subtotal'] - $cart_item['line_total'];
+            $discount_val = ($discount <= 0) ? 0 : (($discount / $cart_item['line_subtotal']) * 100) ;
+
+            if ( $cart_item['variation_id'] ) {
+                $variable_product= new WC_Product_Variation( $cart_item['variation_id'] );
+
+                if ( $variable_product->is_on_sale() ) {
+                    $price = $variable_product->get_sale_price();
+                } else {
+                    $price = $variable_product->get_regular_price();
+                }
+
+                $description = '';
+                $image_id  = $variable_product->image_id;
+                $image_url = wp_get_attachment_image_url($image_id, 'full');
+
+                if ( empty($image_url) ) {
+                    $attachment_ids = $product->get_gallery_image_ids();
+                    if (!empty($attachment_ids)) {
+                        $first_image_id = reset($attachment_ids);
+                        $image_url = wp_get_attachment_url($first_image_id);
+                    }
+                }
+                if ( empty($variable_product->description) ) {
+                    // En caso de que la descripción sea vacía, obtener la descripción alternativa de $product
+                    $description = wp_strip_all_tags(str_replace(array("\r\n", "\r", "\n", "\t"), ' ', $product->get_description()));
+                }
+                else{
+                    $description = wp_strip_all_tags(str_replace(array("\r\n", "\r", "\n", "\t"), ' ', $variable_product->description));
+                }
+
+                $join_cat = $join_categories."/".$join_subcategories;
+
+                $items[] = array(
+                    'name'        => $variable_product->get_name(),
+                    'description' => $description,
+                    'category'    => '',
+                    'sku'         => $variable_product->sku,
+                    'image_url'   => $image_url,
+                    'item_url'    => $product->get_permalink($cart_item),
+                    'price'       => number_format($price, 2, '.', ''),
+                    'quantity'    => (int) $cart_item['quantity'],
+                    'discount'    => $discount_val,
+                );
+            }
+            else{
+
+                if ($product->is_on_sale()) {
+                    $price = $product->get_sale_price();
+                } else {
+                    $price = $product->get_regular_price();
+                }
+
+                if ( $price == 0 ) {
+                    $discount = 0;
+                }else{
+                    $discount = round( ($discount / $without_reduction) * 100, 2);
+                }
+
+                $join_cat = $join_categories."/".$join_subcategories;
+                try {
+                    $sku = $product->get_sku();
+                } catch (Exception $e) {
+                    $sku = '';
+                }
+                $items[] = array(
+                    'name'        => $product->get_title(),
+                    'description' => $product->get_description(),
+                    'category'    => $join_cat,
+                    'sku'         => $sku,
+                    'image_url'   => get_the_post_thumbnail_url($product_id),
+                    'item_url'    => $product->get_permalink($cart_item),
+                    'price'       => number_format($price, 2, '.', ''),
+                    'quantity'    => (int) $cart_item['quantity'],
+                    'discount'    => $discount_val,
+                );
+
+            }
+        }
+
+        if (isset($user_details->wcf_shipping_cost)) {
+            $shipping = number_format($user_details->wcf_shipping_cost, 2, '.', '');
+        }
+
+        $data = array(
+                    'status'         => 'abandoned',
+                    'abandoned_date' => date('Y-m-d', strtotime($details->time)),
+                    'ecommerce'      => 'woocommerce',
+                    'shop_name'      => get_option('blogname'),
+                    'order_url'      => $helper->get_checkout_url( $details->checkout_id, $token_data ),
+                    'currency'       => get_option('woocommerce_currency'),
+                    'store_url'      => $url_base,
+                    'products'       => $items,
+                    'price'          => $details->cart_total,
+                    'shipping'       => $shipping,
+                    'coupon'         =>  0,
+
+                );
+        $lang = get_bloginfo("language");
+        $site_name = get_option('blogname');
+        $site_name_valid = empty( $site_name ) ? 'WordPress' : $site_name;
+
+        $data['contact'] = array(
+                            'id_customer'     => '',
+                            'email'           => $details->email,
+                            'contact_source'  => get_option('blogname'),
+                            'custom_field'   => [],
+                            'tags'            => array(
+                                                    'woocommerce',
+                                                    $site_name_valid,
+                                                )
+                        );
+        if ( !empty( $user_details->wcf_first_name ) ) {
+            $data['contact']['first_name'] = $user_details->wcf_first_name;
+        }
+        if ( !empty($user_details->wcf_last_name) ) {
+            $data['contact']['last_name'] = $user_details->wcf_last_name;
+        }
+        if ( !empty($lang) ) {
+            $data['contact']['custom_field'] = array(
+                'field' => 'ecommerce_language',
+                'value' => $lang,
+            );
+        }
+
+        $street = $user_details->wcf_billing_address_1 . $user_details->wcf_billing_address_2;
+        $city = $user_details->wcf_shipping_city;
+        $country = $user_details->wcf_shipping_country;
+        $postal_code = $user_details->wcf_billing_postcode;
+        $customer_address = array('type' => 1);
+
+        if ( $street ) {
+            $customer_address['street'] = $street;
+        }
+        if ( $city ) {
+            $customer_address['city'] = $city;
+        }
+        if ( $country ) {
+            $customer_address['country'] = $country;
+        }
+        if ( $postal_code ) {
+            $customer_address['postal_code'] = $postal_code;
+        }
+
+        if ( !empty($user_details->wcf_billing_state) ) {
+            $customer_address['state'] = $user_details->wcf_billing_state;
+            if ( empty($customer_address['state']) ) {
+                unset($customer_address['state']);
+            }
+        }
+        $data['contact']['addresses'][] = $customer_address;
+
+        if ( !empty($user_details->wcf_billing_company) ) {
+            $data['contact']['company'] = $user_details->wcf_billing_company;
+        }
+
+        if ( !empty($user_details->wcf_phone_number) ) {
+            $data['contact']['phones'][] = array('phone' => $user_details->wcf_phone_number);
+        }
+
+        $data['cart_id'] = $abandoned_cart->id;
+        $data['order_id'] = $abandoned_cart->id;
+
+        //Send data to Clientify
+        return $api->post_order_clientify( $data );
+    }
+
+    /**
+     * Sync a single abandoned cart row by id. Used by the admin "Enviar" button.
+     *
+     * @param int $cart_id Row id in the cart abandonment table.
+     * @return array Result info: array( 'success' => bool, 'message' => string ).
+     */
+    public function sync_single_abandoned_cart( $cart_id ) {
+        global $wpdb;
+        $cart_abandonment_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';
+
+        $abandoned_cart = $wpdb->get_row(
+            $wpdb->prepare( "SELECT id, checkout_id, session_id FROM {$cart_abandonment_table} WHERE id = %d", $cart_id )
+        );
+
+        if ( ! $abandoned_cart ) {
+            return array( 'success' => false, 'message' => __( 'Carrito no encontrado.', 'clientify' ) );
+        }
+
+        $api      = new Clientify_Api();
+        $helper   = new Clientify_Helper();
+        $url_base = $this->get_local_api_url();
+
+        $result = $this->sync_one_abandoned_cart( $abandoned_cart, $helper, $url_base, $api );
+
+        if ( null === $result ) {
+            return array( 'success' => false, 'message' => __( 'El carrito no tiene productos o la sesión ya no existe.', 'clientify' ) );
+        }
+
+        if ( is_array( $result ) && ! empty( $result['error'] ) ) {
+            $message = isset( $result['message'] ) ? $result['message'] : __( 'Error al enviar el carrito a Clientify.', 'clientify' );
+            return array( 'success' => false, 'message' => $message );
+        }
+
+        return array( 'success' => true, 'message' => __( 'Carrito enviado a Clientify correctamente.', 'clientify' ) );
+    }
+
+    /**
+     * REST callback: elimina carritos abandonados. Pensado para uso interno (boton admin)
+     * y para que Clientify pueda disparar la limpieza remotamente en el futuro.
+     *
+     * Body/query params:
+     *  - type_clean: 'days' (default) | 'all'
+     *  - days: int, solo aplica con type_clean=days (default 30)
+     */
+    public function clean_abandoned_carts( $params ) {
+        $type_clean = $params->get_param('type_clean');
+        $type_clean = in_array( $type_clean, array( 'days', 'all' ), true ) ? $type_clean : 'days';
+
+        $days = $params->get_param('days');
+        $days = $days ? (int) $days : 30;
+
+        $helper = new Clientify_Helper();
+        return $helper->delete_abandoned_carts( array(
+            'type_clean' => $type_clean,
+            'days'       => $days,
+        ) );
     }
 
 

@@ -331,6 +331,38 @@ class Clientify_Helper {
 
 	}
 
+	/**
+	 * Delete abandoned carts.
+	 *
+	 * @param array $params 'type_clean' => 'days'|'all', 'days' => int (only used with 'days').
+	 * @return WP_REST_Response
+	 */
+	function delete_abandoned_carts( $params ) {
+		global $wpdb;
+		$table_name = $wpdb->prefix . CLIENTIFY_CART_ABANDONMENT_TABLE;
+
+		if ( $params['type_clean'] === 'days' ) {
+			$days = isset( $params['days'] ) ? max( 1, (int) $params['days'] ) : 30;
+			$fecha_limite = date( 'Y-m-d H:i:s', strtotime( "-{$days} days" ) );
+
+			$resultado = $wpdb->query(
+				$wpdb->prepare( "DELETE FROM $table_name WHERE time < %s", $fecha_limite )
+			);
+		} elseif ( $params['type_clean'] === 'all' ) {
+			$resultado = $wpdb->query( "DELETE FROM $table_name" );
+		} else {
+			return new WP_REST_Response( array( 'message' => 'Tipo de limpieza inválido.' ), 400 );
+		}
+
+		if ( $resultado === false ) {
+			return new WP_REST_Response( array( 'message' => 'Error al eliminar los carritos abandonados.' ), 500 );
+		} elseif ( $resultado === 0 ) {
+			return new WP_REST_Response( array( 'message' => 'No se encontraron carritos para eliminar.', 'deleted_rows' => 0 ), 200 );
+		}
+
+		return new WP_REST_Response( array( 'message' => 'Carritos abandonados eliminados correctamente.', 'deleted_rows' => $resultado ), 200 );
+	}
+
 }
 
 //Clientify_Helper::get_instance();

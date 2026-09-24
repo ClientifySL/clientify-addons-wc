@@ -436,3 +436,207 @@ h2.heading {
     margin: 0 auto; 
     padding: 20px;
 }
+
+.clientify-carts-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+
+.clientify-per-page-selector {
+    margin-bottom: 0;
+}
+
+.clientify-clean-carts-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 16px 0;
+}
+
+.clientify-clean-carts-options label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 14px;
+    color: #444;
+}
+
+.clientify-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+.controls button.clientify-view-cart-btn,
+.controls button.clientify-send-cart-btn {
+    padding: 6px 14px !important;
+    width: auto !important;
+    min-width: 0 !important;
+    margin-bottom: 0 !important;
+    font-size: 13px !important;
+    font-weight: 500;
+    line-height: 1.4;
+    white-space: nowrap;
+    border-radius: 4px;
+}
+
+.controls button.clientify-view-cart-btn {
+    background-color: #fff !important;
+    color: #052451 !important;
+    border: 1px solid #c6c6c6 !important;
+}
+
+.controls button.clientify-view-cart-btn:hover {
+    background-color: #f0f4fa !important;
+    border-color: #052451 !important;
+}
+
+.controls button.clientify-send-cart-btn {
+    background-color: #0069ff !important;
+    color: #fff !important;
+    border: none !important;
+}
+
+.controls button.clientify-send-cart-btn:hover {
+    background-color: #0057d9 !important;
+}
+
+.controls button.clientify-send-cart-btn:disabled {
+    background-color: #9db8e0 !important;
+    cursor: not-allowed;
+}
+
+.clientify-pagination {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 16px;
+}
+
+.clientify-page-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 32px;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid #c6c6c6;
+    border-radius: 4px;
+    background-color: #fff;
+    color: #052451;
+    font-size: 14px;
+    text-decoration: none;
+    transition: all 0.2s;
+}
+
+.clientify-page-number:hover {
+    border-color: #052451;
+    color: #052451;
+    background-color: #f0f4fa;
+}
+
+.clientify-page-number.current {
+    background-color: #052451;
+    border-color: #052451;
+    color: #fff;
+    font-weight: 600;
+    cursor: default;
+}
+
+.clientify-per-page-selector form {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.clientify-per-page-selector label {
+    font-weight: 600;
+    color: #444;
+}
+
+.clientify-per-page-selector select {
+    width: auto;
+    margin-bottom: 0;
+    font-size: 14px;
+    border: 1px solid #c6c6c6;
+    border-radius: 4px;
+    background-color: #fff;
+}
+
+.clientify-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 100000;
+}
+
+.clientify-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.clientify-modal-content {
+    position: relative;
+    background: #fff;
+    max-width: 480px;
+    width: 90%;
+    margin: 10vh auto 0;
+    padding: 24px;
+    border-radius: 4px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+}
+
+.clientify-modal-close {
+    position: absolute;
+    top: 10px;
+    right: 14px;
+    background: none;
+    border: none;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+    color: #555;
+}
+
+.clientify-modal-content h3 {
+    margin-top: 0;
+}
+
+.clientify-modal-content h4 {
+    margin-bottom: 6px;
+}
+
+.clientify-modal-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.clientify-modal-table th,
+.clientify-modal-table td {
+    text-align: left;
+    padding: 4px 8px 4px 0;
+    vertical-align: top;
+    font-size: 13px;
+}
+
+.clientify-modal-table th {
+    width: 120px;
+    color: #555;
+    font-weight: 600;
+}
+
+#clientify-modal-products {
+    margin: 0 0 0 18px;
+}

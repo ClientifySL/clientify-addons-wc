@@ -243,6 +243,156 @@ jQuery(document).ready(function () {
 		});
 	});
 
+	// Modal de detalle de carrito abandonado.
+	var $cartModal = $('#clientify-cart-modal');
 
+	$(document).on('click', '.clientify-view-cart-btn', function () {
+		var detail = $(this).data('detail') || {};
+		var $list = $('#clientify-modal-products').empty();
+
+		if (detail.products && detail.products.length) {
+			$.each(detail.products, function (i, product) {
+				$('<li></li>')
+					.text(product.name + ' × ' + product.quantity + ' — ' + product.total)
+					.appendTo($list);
+			});
+		} else {
+			$('<li></li>').text('Sin productos').appendTo($list);
+		}
+
+		$('#clientify-modal-cart-id').text('#' + (detail.cartId || ''));
+		$('#clientify-modal-name').text(detail.name || '—');
+		$('#clientify-modal-email').text(detail.email || '—');
+		$('#clientify-modal-phone').text(detail.phone || '—');
+
+		var addressParts = [detail.address, detail.city, detail.country, detail.postalCode].filter(Boolean);
+		$('#clientify-modal-address').text(addressParts.length ? addressParts.join(', ') : '—');
+
+		$('#clientify-modal-coupon').text(detail.coupon || '—');
+		$('#clientify-modal-shipping').text(detail.shipping || '—');
+		$('#clientify-modal-total').text(detail.total || '—');
+		$('#clientify-modal-status').text(detail.status || '—');
+		$('#clientify-modal-unsubscribed').text(detail.unsubscribed || '—');
+		$('#clientify-modal-checkout-id').text(detail.checkoutId || '—');
+		$('#clientify-modal-session-id').text(detail.sessionId || '—');
+		$('#clientify-modal-date').text(detail.date || '—');
+
+		$cartModal.fadeIn(150);
+	});
+
+	$(document).on('click', '.clientify-modal-close, .clientify-modal-overlay', function () {
+		$(this).closest('.clientify-modal').fadeOut(150);
+	});
+
+	$(document).on('keyup', function (e) {
+		if (e.key === 'Escape') {
+			$('.clientify-modal:visible').fadeOut(150);
+		}
+	});
+
+	// Enviar carrito abandonado individual a Clientify.
+	$(document).on('click', '.clientify-send-cart-btn', function () {
+		var $btn = $(this);
+		if ($btn.prop('disabled') || typeof clientifyAdmin === 'undefined') {
+			return;
+		}
+
+		var cartId = $btn.data('cart-id');
+		var originalText = $btn.text();
+		$btn.prop('disabled', true).text('Enviando…');
+
+		$.ajax({
+			url: clientifyAdmin.ajaxUrl,
+			type: 'POST',
+			data: {
+				action: 'clientify_sync_single_cart',
+				security: clientifyAdmin.syncSingleCartNonce,
+				cart_id: cartId
+			},
+			success: function (response) {
+				var message = (response && response.message) ? response.message : 'Respuesta inesperada del servidor.';
+				if (response && response.status === 'success') {
+					if (typeof statusMessage === 'function') {
+						statusMessage(message, 'success');
+					}
+				} else {
+					if (typeof statusMessage === 'function') {
+						statusMessage(message, 'error');
+					}
+				}
+			},
+			error: function () {
+				if (typeof statusMessage === 'function') {
+					statusMessage('Error al enviar el carrito. Inténtalo de nuevo.', 'error');
+				}
+			},
+			complete: function () {
+				$btn.prop('disabled', false).text(originalText);
+			}
+		});
+	});
+
+	// Limpiar carritos abandonados (con modal de confirmación).
+	var $cleanModal = $('#clientify-clean-carts-modal');
+
+	$(document).on('click', '#clientify-clean-carts-btn', function () {
+		$cleanModal.fadeIn(150);
+	});
+
+	$(document).on('click', '#clientify-clean-carts-confirm', function () {
+		var $btn = $(this);
+		if ($btn.prop('disabled') || typeof clientifyAdmin === 'undefined') {
+			return;
+		}
+
+		var type = $('input[name="clientify_clean_type"]:checked').val();
+		var days = $('#clientify-clean-days').val();
+
+		var confirmMessage = (type === 'all')
+			? '¿Seguro que quieres eliminar TODOS los carritos abandonados? Esta acción no se puede deshacer.'
+			: '¿Seguro que quieres eliminar los carritos abandonados con más de ' + days + ' días de antigüedad? Esta acción no se puede deshacer.';
+
+		if (!window.confirm(confirmMessage)) {
+			return;
+		}
+
+		var originalText = $btn.text();
+		$btn.prop('disabled', true).text('Eliminando…');
+
+		$.ajax({
+			url: clientifyAdmin.ajaxUrl,
+			type: 'POST',
+			data: {
+				action: 'clientify_clean_abandoned_carts',
+				security: clientifyAdmin.cleanAbandonedCartsNonce,
+				type_clean: type,
+				days: days
+			},
+			success: function (response) {
+				var message = (response && response.message) ? response.message : 'Respuesta inesperada del servidor.';
+				if (response && response.status === 'success') {
+					if (typeof statusMessage === 'function') {
+						statusMessage(message, 'success');
+					}
+					setTimeout(function () {
+						window.location.reload();
+					}, 1200);
+				} else {
+					if (typeof statusMessage === 'function') {
+						statusMessage(message, 'error');
+					}
+				}
+			},
+			error: function () {
+				if (typeof statusMessage === 'function') {
+					statusMessage('Error al limpiar los carritos. Inténtalo de nuevo.', 'error');
+				}
+			},
+			complete: function () {
+				$btn.prop('disabled', false).text(originalText);
+				$cleanModal.fadeOut(150);
+			}
+		});
+	});
 
 });})( jQuery );

@@ -66,6 +66,75 @@ class Clientify_Plugin_Core
 		die();
 	}
 
+	/**
+	 * AJAX: enviar un solo carrito abandonado a Clientify (botón "Enviar" en el admin).
+	 */
+	function sync_single_abandoned_cart()
+	{
+		check_ajax_referer( 'clientify_sync_single_cart', 'security' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			$this->send_json( [ 'status' => 'error', 'message' => 'No tienes permisos para realizar esta acción.' ] );
+		}
+
+		$cart_id = isset( $_POST['cart_id'] ) ? intval( $_POST['cart_id'] ) : 0;
+		if ( ! $cart_id ) {
+			$this->send_json( [ 'status' => 'error', 'message' => 'Carrito inválido.' ] );
+		}
+
+		$endpoint_class = new Clientify_Endpoint();
+		$result         = $endpoint_class->sync_single_abandoned_cart( $cart_id );
+
+		if ( ! $result['success'] ) {
+			Clientify_Addons_Logs::insert_log( 'ERROR', sprintf(
+				'Sync single abandoned cart #%d failed: %s', $cart_id, $result['message']
+			), __FILE__, __LINE__ );
+		}
+
+		$this->send_json( [
+			'status'  => $result['success'] ? 'success' : 'error',
+			'message' => $result['message'],
+		] );
+	}
+
+	/**
+	 * AJAX: limpiar carritos abandonados (botón "Limpiar carritos" en el admin, con modal de confirmación).
+	 */
+	function clean_abandoned_carts_ajax()
+	{
+		check_ajax_referer( 'clientify_clean_abandoned_carts', 'security' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			$this->send_json( [ 'status' => 'error', 'message' => 'No tienes permisos para realizar esta acción.' ] );
+		}
+
+		$type_clean = isset( $_POST['type_clean'] ) ? sanitize_text_field( $_POST['type_clean'] ) : 'days';
+		$type_clean = in_array( $type_clean, [ 'days', 'all' ], true ) ? $type_clean : 'days';
+		$days       = isset( $_POST['days'] ) ? intval( $_POST['days'] ) : 30;
+
+		$helper   = new Clientify_Helper();
+		$response = $helper->delete_abandoned_carts( [
+			'type_clean' => $type_clean,
+			'days'       => $days,
+		] );
+
+		$data       = $response->get_data();
+		$status_code = $response->get_status();
+		$success     = $status_code >= 200 && $status_code < 300;
+
+		if ( ! $success ) {
+			Clientify_Addons_Logs::insert_log( 'ERROR', sprintf(
+				'Clean abandoned carts failed [%s]: %s', $type_clean, $data['message'] ?? 'unknown'
+			), __FILE__, __LINE__ );
+		}
+
+		$this->send_json( [
+			'status'      => $success ? 'success' : 'error',
+			'message'     => $data['message'] ?? '',
+			'deleted_rows' => $data['deleted_rows'] ?? 0,
+		] );
+	}
+
 	function connect_clientify()
 	{
 		$key = ( isset( $_POST['apikey'] ) && $_POST['apikey'] !== '' )

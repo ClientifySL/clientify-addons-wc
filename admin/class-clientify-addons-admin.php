@@ -99,6 +99,16 @@ class Clientify_Addons_Admin {
 			'4.0.13',
 			true
 		);
+
+		wp_localize_script(
+			$this->plugin_name,
+			'clientifyAdmin',
+			array(
+				'ajaxUrl'                 => admin_url( 'admin-ajax.php' ),
+				'syncSingleCartNonce'     => wp_create_nonce( 'clientify_sync_single_cart' ),
+				'cleanAbandonedCartsNonce' => wp_create_nonce( 'clientify_clean_abandoned_carts' ),
+			)
+		);
 	}
 
 

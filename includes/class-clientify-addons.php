@@ -310,6 +310,9 @@ class Clientify_Addons {
 		$this->loader->add_action('wp_ajax_change_gdpr', $register_custom_post_type, 'change_gdpr');
 		$this->loader->add_action('wp_ajax_nopriv_change_gdpr', $register_custom_post_type, 'change_gdpr');
 
+		$this->loader->add_action('wp_ajax_clientify_sync_single_cart', $register_custom_post_type, 'sync_single_abandoned_cart');
+		$this->loader->add_action('wp_ajax_clientify_clean_abandoned_carts', $register_custom_post_type, 'clean_abandoned_carts_ajax');
+
 		// Store user details from the current checkout page — solo si el plugin está conectado.
 		if ( get_option('CLIENTIFY_STATUS') != 0 ) {
 			$this->loader->add_action( 'wp_ajax_clientify_save_cart_abandonment_data', $register_custom_post_type, 'clientify_save_cart_abandonment_data' );

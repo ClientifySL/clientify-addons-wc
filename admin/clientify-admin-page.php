@@ -26,6 +26,9 @@ function clientify_settings_page()
 			<a href="?page=clientify-addons&tab=logs" class="nav-tab color-nav <?php if ($tab === 'logs') : ?>nav-tab-active<?php endif; ?>">
 				<span class="dashicons dashicons-list-view"></span><?php _e('Logs', 'clientify'); ?>
 			</a>
+			<a href="?page=clientify-addons&tab=abandoned_carts" class="nav-tab color-nav <?php if ($tab === 'abandoned_carts') : ?>nav-tab-active<?php endif; ?>">
+				<span class="dashicons dashicons-cart"></span><?php _e('Carritos Abandonados', 'clientify'); ?>
+			</a>
 		</nav>
 		<div class="body_clientify">
 			<?php
@@ -203,7 +206,183 @@ function clientify_settings_page()
 							echo '</div>';
 						}
 						break;
-		
+
+					case 'abandoned_carts':
+						global $wpdb;
+						$cart_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';
+
+						if ($wpdb->get_var("SHOW TABLES LIKE '$cart_table'") != $cart_table) {
+							echo '<div class="general">';
+							echo '<div class="form-group">';
+							echo '<div class="notice notice-warning"><p>No se encontró la tabla de carritos abandonados. Por favor, asegúrate de que el plugin esté correctamente activado.</p></div>';
+							echo '</div>';
+							echo '</div>';
+							break;
+						}
+
+						$allowed_per_page = array(5, 25, 50, 100);
+						$per_page         = isset($_GET['per_page']) ? intval($_GET['per_page']) : 5;
+						if (!in_array($per_page, $allowed_per_page, true)) {
+							$per_page = 5;
+						}
+						$paged       = isset($_GET['paged']) ? max(1, intval($_GET['paged'])) : 1;
+						$offset      = ($paged - 1) * $per_page;
+						$total_carts = (int) $wpdb->get_var("SELECT COUNT(*) FROM $cart_table");
+						$total_pages = $per_page > 0 ? (int) ceil($total_carts / $per_page) : 1;
+
+						$carts = $wpdb->get_results(
+							$wpdb->prepare(
+								"SELECT id, checkout_id, session_id, email, cart_contents, cart_total, other_fields, order_status, unsubscribed, coupon_code, time FROM $cart_table ORDER BY time DESC LIMIT %d OFFSET %d",
+								$per_page,
+								$offset
+							)
+						);
+
+						echo '<div class="general">';
+						echo '<div class="form-group-logs">';
+						echo '<h2 class="heading">Carritos Abandonados</h2>';
+
+						echo '<div class="clientify-carts-toolbar">';
+
+						echo '<div class="clientify-per-page-selector">';
+						echo '<form method="get">';
+						echo '<input type="hidden" name="page" value="clientify-addons">';
+						echo '<input type="hidden" name="tab" value="abandoned_carts">';
+						echo '<label for="clientify_per_page">' . esc_html__('Mostrar', 'clientify') . '</label>';
+						echo '<select name="per_page" id="clientify_per_page" onchange="this.form.submit()">';
+						foreach ($allowed_per_page as $option) {
+							echo '<option value="' . esc_attr($option) . '"' . selected($per_page, $option, false) . '>' . esc_html($option) . '</option>';
+						}
+						echo '</select>';
+						echo '</form>';
+						echo '</div>';
+
+						echo '<button type="button" id="clientify-clean-carts-btn" class="button">' . esc_html__('Limpiar carritos', 'clientify') . '</button>';
+
+						echo '</div>';
+
+						if (empty($carts)) {
+							echo '<div class="controls">';
+							echo '<p>No hay carritos abandonados registrados.</p>';
+							echo '</div>';
+						} else {
+							echo '<div class="controls">';
+							echo '<table class="wp-list-table widefat fixed striped">';
+							echo '<thead><tr><th>ID</th><th>Email</th><th>Total</th><th>Estado</th><th>Cupón</th><th>Suscrito</th><th>Fecha</th><th>Detalle</th><th>Acción</th></tr></thead>';
+							echo '<tbody>';
+							foreach ($carts as $cart) {
+								$items        = maybe_unserialize($cart->cart_contents);
+								$item_count   = is_array($items) ? count($items) : 0;
+								$other_fields = (object) maybe_unserialize($cart->other_fields);
+
+								$products_json = array();
+								foreach ($items as $item) {
+									$product_id = isset($item['product_id']) ? $item['product_id'] : 0;
+									$product    = $product_id ? wc_get_product($product_id) : false;
+									$products_json[] = array(
+										'name'     => $product ? $product->get_name() : sprintf('Producto #%d', $product_id),
+										'quantity' => isset($item['quantity']) ? (int) $item['quantity'] : 0,
+										'total'    => number_format(isset($item['line_total']) ? (float) $item['line_total'] : 0, 2),
+									);
+								}
+
+								$full_name = trim(($other_fields->wcf_first_name ?? '') . ' ' . ($other_fields->wcf_last_name ?? ''));
+								$address   = trim(($other_fields->wcf_billing_address_1 ?? '') . ' ' . ($other_fields->wcf_billing_address_2 ?? ''));
+
+								$detail_json = wp_json_encode(array(
+									'cartId'      => $cart->id,
+									'checkoutId'  => $cart->checkout_id,
+									'sessionId'   => $cart->session_id,
+									'email'       => $cart->email,
+									'name'        => $full_name,
+									'phone'       => $other_fields->wcf_phone_number ?? '',
+									'address'     => $address,
+									'city'        => $other_fields->wcf_shipping_city ?? '',
+									'country'     => $other_fields->wcf_shipping_country ?? '',
+									'postalCode'  => $other_fields->wcf_billing_postcode ?? '',
+									'shipping'    => $other_fields->wcf_shipping_cost ?? '',
+									'coupon'      => $cart->coupon_code,
+									'unsubscribed' => $cart->unsubscribed ? 'Sí' : 'No',
+									'status'      => $cart->order_status,
+									'total'       => number_format((float) $cart->cart_total, 2),
+									'date'        => $cart->time,
+									'products'    => $products_json,
+								));
+
+								echo '<tr>';
+								echo '<td>' . esc_html($cart->id) . '</td>';
+								echo '<td>' . esc_html($cart->email) . '</td>';
+								echo '<td>' . esc_html(number_format((float) $cart->cart_total, 2)) . '</td>';
+								echo '<td>' . esc_html($cart->order_status) . '</td>';
+								echo '<td>' . esc_html($cart->coupon_code ?: '—') . '</td>';
+								echo '<td>' . ($cart->unsubscribed ? esc_html__('No', 'clientify') : esc_html__('Sí', 'clientify')) . '</td>';
+								echo '<td>' . esc_html($cart->time) . '</td>';
+								echo '<td><button type="button" class="button clientify-view-cart-btn" data-detail="' . esc_attr($detail_json) . '">' . esc_html__('Ver', 'clientify') . ($item_count ? ' (' . esc_html($item_count) . ')' : '') . '</button></td>';
+								echo '<td><button type="button" class="button button-primary clientify-send-cart-btn" data-cart-id="' . esc_attr($cart->id) . '">' . esc_html__('Enviar', 'clientify') . '</button></td>';
+								echo '</tr>';
+							}
+							echo '</tbody>';
+							echo '</table>';
+							echo '</div>';
+
+							if ($total_pages > 1) {
+								echo '<div class="clientify-pagination">';
+								for ($i = 1; $i <= $total_pages; $i++) {
+									$page_url = esc_url(add_query_arg(array('page' => 'clientify-addons', 'tab' => 'abandoned_carts', 'per_page' => $per_page, 'paged' => $i)));
+									$class    = $i === $paged ? ' class="clientify-page-number current"' : ' class="clientify-page-number"';
+									echo '<a' . $class . ' href="' . $page_url . '">' . esc_html($i) . '</a>';
+								}
+								echo '</div>';
+							}
+						}
+
+						echo '</div>';
+						echo '</div>';
+
+						// Modal de detalle del carrito.
+						echo '<div id="clientify-cart-modal" class="clientify-modal" style="display:none;">';
+						echo '<div class="clientify-modal-overlay"></div>';
+						echo '<div class="clientify-modal-content">';
+						echo '<button type="button" class="clientify-modal-close" aria-label="' . esc_attr__('Cerrar', 'clientify') . '">&times;</button>';
+						echo '<h3>' . esc_html__('Detalle del carrito', 'clientify') . ' <span id="clientify-modal-cart-id"></span></h3>';
+						echo '<table class="clientify-modal-table"><tbody>';
+						echo '<tr><th>' . esc_html__('Cliente', 'clientify') . '</th><td id="clientify-modal-name"></td></tr>';
+						echo '<tr><th>' . esc_html__('Email', 'clientify') . '</th><td id="clientify-modal-email"></td></tr>';
+						echo '<tr><th>' . esc_html__('Teléfono', 'clientify') . '</th><td id="clientify-modal-phone"></td></tr>';
+						echo '<tr><th>' . esc_html__('Dirección', 'clientify') . '</th><td id="clientify-modal-address"></td></tr>';
+						echo '<tr><th>' . esc_html__('Cupón', 'clientify') . '</th><td id="clientify-modal-coupon"></td></tr>';
+						echo '<tr><th>' . esc_html__('Envío', 'clientify') . '</th><td id="clientify-modal-shipping"></td></tr>';
+						echo '<tr><th>' . esc_html__('Total', 'clientify') . '</th><td id="clientify-modal-total"></td></tr>';
+						echo '<tr><th>' . esc_html__('Estado', 'clientify') . '</th><td id="clientify-modal-status"></td></tr>';
+						echo '<tr><th>' . esc_html__('Suscrito', 'clientify') . '</th><td id="clientify-modal-unsubscribed"></td></tr>';
+						echo '<tr><th>' . esc_html__('Checkout ID', 'clientify') . '</th><td id="clientify-modal-checkout-id"></td></tr>';
+						echo '<tr><th>' . esc_html__('Session ID', 'clientify') . '</th><td id="clientify-modal-session-id"></td></tr>';
+						echo '<tr><th>' . esc_html__('Fecha', 'clientify') . '</th><td id="clientify-modal-date"></td></tr>';
+						echo '</tbody></table>';
+						echo '<h4>' . esc_html__('Productos', 'clientify') . '</h4>';
+						echo '<ul id="clientify-modal-products"></ul>';
+						echo '</div>';
+						echo '</div>';
+
+						// Modal de confirmación para limpiar carritos.
+						echo '<div id="clientify-clean-carts-modal" class="clientify-modal" style="display:none;">';
+						echo '<div class="clientify-modal-overlay"></div>';
+						echo '<div class="clientify-modal-content">';
+						echo '<button type="button" class="clientify-modal-close" aria-label="' . esc_attr__('Cerrar', 'clientify') . '">&times;</button>';
+						echo '<h3>' . esc_html__('Limpiar carritos abandonados', 'clientify') . '</h3>';
+						echo '<p>' . esc_html__('Esta acción elimina definitivamente los registros de la tabla de carritos abandonados. No afecta a los pedidos ya completados.', 'clientify') . '</p>';
+						echo '<div class="clientify-clean-carts-options">';
+						echo '<label><input type="radio" name="clientify_clean_type" value="days" checked> ' . esc_html__('Eliminar carritos con más de', 'clientify') . ' <input type="number" id="clientify-clean-days" value="30" min="1" style="width:60px;"> ' . esc_html__('días', 'clientify') . '</label>';
+						echo '<label><input type="radio" name="clientify_clean_type" value="all"> ' . esc_html__('Eliminar todos los carritos', 'clientify') . '</label>';
+						echo '</div>';
+						echo '<div class="clientify-modal-actions">';
+						echo '<button type="button" class="button clientify-modal-close">' . esc_html__('Cancelar', 'clientify') . '</button>';
+						echo '<button type="button" id="clientify-clean-carts-confirm" class="button button-primary">' . esc_html__('Eliminar', 'clientify') . '</button>';
+						echo '</div>';
+						echo '</div>';
+						echo '</div>';
+						break;
+
 				endswitch;
 			?>
 		</div>
