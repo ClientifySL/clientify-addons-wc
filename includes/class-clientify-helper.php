@@ -363,6 +363,36 @@ class Clientify_Helper {
 		return new WP_REST_Response( array( 'message' => 'Carritos abandonados eliminados correctamente.', 'deleted_rows' => $resultado ), 200 );
 	}
 
+	/**
+	 * Cantidad de carritos abandonados nuevos desde la última vez que el admin
+	 * revisó la pestaña "Carritos Abandonados".
+	 *
+	 * @return int
+	 */
+	function count_new_abandoned_carts() {
+		global $wpdb;
+		$table_name  = $wpdb->prefix . CLIENTIFY_CART_ABANDONMENT_TABLE;
+		$last_seen_id = (int) get_option( 'CLIENTIFY_ABANDONED_CARTS_LAST_SEEN_ID', 0 );
+
+		if ( $wpdb->get_var( "SHOW TABLES LIKE '$table_name'" ) !== $table_name ) {
+			return 0;
+		}
+
+		return (int) $wpdb->get_var(
+			$wpdb->prepare( "SELECT COUNT(*) FROM $table_name WHERE id > %d", $last_seen_id )
+		);
+	}
+
+	/**
+	 * Marca como vistos todos los carritos abandonados existentes hasta ahora.
+	 */
+	function mark_abandoned_carts_as_seen() {
+		global $wpdb;
+		$table_name = $wpdb->prefix . CLIENTIFY_CART_ABANDONMENT_TABLE;
+		$max_id     = (int) $wpdb->get_var( "SELECT MAX(id) FROM $table_name" );
+		update_option( 'CLIENTIFY_ABANDONED_CARTS_LAST_SEEN_ID', $max_id );
+	}
+
 }
 
 //Clientify_Helper::get_instance();

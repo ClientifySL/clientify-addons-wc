@@ -13,9 +13,20 @@ class Clientify_Plugin_Core
 	 * @since    1.1.0
 	 */
 	function clientify_create_menu() {
+		$menu_title = 'Clientify';
+
+		$helper       = new Clientify_Helper();
+		$new_carts_count = $helper->count_new_abandoned_carts();
+		if ( $new_carts_count > 0 ) {
+			$menu_title .= sprintf(
+				' <span class="awaiting-mod count-%1$d"><span class="pending-count">%1$d</span></span>',
+				$new_carts_count
+			);
+		}
+
 		add_menu_page(
 			'Clientify', // Título de la página
-			'Clientify', // Título del menú
+			$menu_title, // Título del menú
 			'administrator', // Capacidad requerida
 			'clientify-addons', // Slug del menú (usamos un nombre simple)
 			'clientify_settings_page', // Función de callback
@@ -2713,6 +2724,8 @@ function agregar_opcion_suscripcion($menu_items) {
 				'wcf_billing_address_2'   => $post_data['wcf_billing_address_2'],
 				'wcf_billing_state'       => $post_data['wcf_billing_state'],
 				'wcf_billing_postcode'    => $post_data['wcf_billing_postcode'],
+				'wcf_billing_city'        => $post_data['wcf_city'],
+				'wcf_billing_country'     => $post_data['wcf_country'],
 				'wcf_shipping_first_name' => $post_data['wcf_shipping_first_name'],
 				'wcf_shipping_last_name'  => $post_data['wcf_shipping_last_name'],
 				'wcf_shipping_company'    => $post_data['wcf_shipping_company'],
@@ -2730,6 +2743,10 @@ function agregar_opcion_suscripcion($menu_items) {
 				'wcf_shipping_cost'       => $shipping_cost
 			);
 
+			// Cupon(es) aplicado(s) al carrito en el momento del abandono.
+			$applied_coupons = WC()->cart->get_applied_coupons();
+			$coupon_code     = ! empty( $applied_coupons ) ? implode( ', ', $applied_coupons ) : '';
+
 			$checkout_details = apply_filters(
 				'woo_ca_session_abandoned_data',
 				array(
@@ -2739,6 +2756,7 @@ function agregar_opcion_suscripcion($menu_items) {
 					'time'          => sanitize_text_field( $current_time ),
 					'other_fields'  => maybe_serialize( $other_fields ),
 					'checkout_id'   => $post_data['wcf_post_id'],
+					'coupon_code'   => sanitize_text_field( $coupon_code ),
 				)
 			);
 

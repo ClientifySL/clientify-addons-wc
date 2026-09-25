@@ -21,9 +21,25 @@
 
 			$( document ).on(
 				'keyup keypress change',
-				'#billing_email, #email ,#billing_phone, input.input-text, textarea.input-text, select',
+				'#billing_email, #email ,#billing_phone, input.input-text, textarea.input-text, select,' +
+					' .wc-block-checkout input, .wc-block-checkout select, .wc-block-components-address-form input, .wc-block-components-address-form select',
 				this._getCheckoutData
 			);
+
+			// El checkout de bloques (WooCommerce Blocks) no dispara "updated_checkout" y
+			// renderiza/actualiza campos via React, sin eventos de input tradicionales al
+			// cargar. Reintentamos periódicamente durante los primeros segundos para
+			// capturar los valores ya precargados (autocompletado del navegador, etc).
+			if ( $( '.wc-block-checkout, .wp-block-woocommerce-checkout' ).length ) {
+				let attempts = 0;
+				const blocksPoll = setInterval( function () {
+					attempts++;
+					wcf_cart_abandonment._getCheckoutData();
+					if ( attempts >= 10 ) {
+						clearInterval( blocksPoll );
+					}
+				}, 1500 );
+			}
 
 			$( '#wcf_ca_gdpr_no_thanks' ).on( 'click', function () {
 				wcf_cart_abandonment._set_cookie();
@@ -82,9 +98,23 @@
 			return valid;
 		},
 
+		// Lee un campo del checkout probando primero el ID clásico (shortcode
+		// checkout, ej. "billing_first_name") y luego el de WooCommerce Blocks
+		// (checkout nuevo, ej. "billing-first_name" con guion).
+		_val( classicId, blocksId ) {
+			const classicVal = jQuery( '#' + classicId ).val();
+			if ( classicVal ) {
+				return classicVal;
+			}
+			return jQuery( '#' + blocksId ).val() || '';
+		},
+
 		_getPhoneWithPrefix() {
-			const rawPhone = jQuery( '#billing_phone' ).val() || '';
-			const dialCode = jQuery( '#billing_phone' ).closest( '.iti' ).find( '.iti__selected-dial-code' ).text().trim();
+			const $phoneField = jQuery( '#billing_phone' ).length
+				? jQuery( '#billing_phone' )
+				: jQuery( '#billing-phone' );
+			const rawPhone = $phoneField.val() || '';
+			const dialCode = $phoneField.closest( '.iti' ).find( '.iti__selected-dial-code' ).text().trim();
 			if ( dialCode && rawPhone ) {
 				return dialCode + rawPhone;
 			}
@@ -119,48 +149,28 @@
 			) {
 				//Checking if the email field is valid or phone number is longer than 1 digit
 				//If Email or Phone valid
-				const wcf_name = jQuery( '#billing_first_name' ).val();
-				const wcf_surname = jQuery( '#billing_last_name' ).val();
+				const wcf_name = wcf_cart_abandonment._val( 'billing_first_name', 'billing-first_name' );
+				const wcf_surname = wcf_cart_abandonment._val( 'billing_last_name', 'billing-last_name' );
 				wcf_phone = wcf_cart_abandonment._getPhoneWithPrefix();
-				const wcf_country = jQuery( '#billing_country' ).val();
-				const wcf_city = jQuery( '#billing_city' ).val();
+				const wcf_country = wcf_cart_abandonment._val( 'billing_country', 'billing-country' );
+				const wcf_city = wcf_cart_abandonment._val( 'billing_city', 'billing-city' );
 
 				//Other fields used for "Remember user input" function
-				const wcf_billing_company = jQuery( '#billing_company' ).val();
-				const wcf_billing_address_1 = jQuery(
-					'#billing_address_1'
-				).val();
-				const wcf_billing_address_2 = jQuery(
-					'#billing_address_2'
-				).val();
-				const wcf_billing_state = jQuery( '#billing_state' ).val();
-				const wcf_billing_postcode = jQuery(
-					'#billing_postcode'
-				).val();
-				const wcf_shipping_first_name = jQuery(
-					'#shipping_first_name'
-				).val();
-				const wcf_shipping_last_name = jQuery(
-					'#shipping_last_name'
-				).val();
-				const wcf_shipping_company = jQuery(
-					'#shipping_company'
-				).val();
-				const wcf_shipping_country = jQuery(
-					'#shipping_country'
-				).val();
-				const wcf_shipping_address_1 = jQuery(
-					'#shipping_address_1'
-				).val();
-				const wcf_shipping_address_2 = jQuery(
-					'#shipping_address_2'
-				).val();
-				const wcf_shipping_city = jQuery( '#shipping_city' ).val();
-				const wcf_shipping_state = jQuery( '#shipping_state' ).val();
-				const wcf_shipping_postcode = jQuery(
-					'#shipping_postcode'
-				).val();
-				const wcf_order_comments = jQuery( '#order_comments' ).val();
+				const wcf_billing_company = wcf_cart_abandonment._val( 'billing_company', 'billing-company' );
+				const wcf_billing_address_1 = wcf_cart_abandonment._val( 'billing_address_1', 'billing-address_1' );
+				const wcf_billing_address_2 = wcf_cart_abandonment._val( 'billing_address_2', 'billing-address_2' );
+				const wcf_billing_state = wcf_cart_abandonment._val( 'billing_state', 'billing-state' );
+				const wcf_billing_postcode = wcf_cart_abandonment._val( 'billing_postcode', 'billing-postcode' );
+				const wcf_shipping_first_name = wcf_cart_abandonment._val( 'shipping_first_name', 'shipping-first_name' );
+				const wcf_shipping_last_name = wcf_cart_abandonment._val( 'shipping_last_name', 'shipping-last_name' );
+				const wcf_shipping_company = wcf_cart_abandonment._val( 'shipping_company', 'shipping-company' );
+				const wcf_shipping_country = wcf_cart_abandonment._val( 'shipping_country', 'shipping-country' );
+				const wcf_shipping_address_1 = wcf_cart_abandonment._val( 'shipping_address_1', 'shipping-address_1' );
+				const wcf_shipping_address_2 = wcf_cart_abandonment._val( 'shipping_address_2', 'shipping-address_2' );
+				const wcf_shipping_city = wcf_cart_abandonment._val( 'shipping_city', 'shipping-city' );
+				const wcf_shipping_state = wcf_cart_abandonment._val( 'shipping_state', 'shipping-state' );
+				const wcf_shipping_postcode = wcf_cart_abandonment._val( 'shipping_postcode', 'shipping-postcode' );
+				const wcf_order_comments = wcf_cart_abandonment._val( 'order_comments', 'order-comments' );
 				const shipping_cost = jQuery( '#shipping_cost' ).val();
 				// Some checkout phone widgets (e.g. intl-tel-input) already keep a
 				// hidden "full_phone_number" input with the E.164 number. Send it

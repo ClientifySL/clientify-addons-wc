@@ -1395,7 +1395,7 @@ class Clientify_Endpoint {
                             'products'       => $items,
                             'price'          => $details->cart_total,
                             'shipping'       => $shipping,
-                            'coupon'         =>  0,
+                            'coupon'         =>  $details->coupon_code ?: 0,
                             
                         );
                 $lang = get_bloginfo("language");
@@ -1426,8 +1426,8 @@ class Clientify_Endpoint {
                 }
 
                 $street = $user_details->wcf_billing_address_1 . $user_details->wcf_billing_address_2;
-                $city = $user_details->wcf_shipping_city;
-                $country = $user_details->wcf_shipping_country;
+                $city = $user_details->wcf_shipping_city ?: $user_details->wcf_billing_city;
+                $country = $user_details->wcf_shipping_country ?: $user_details->wcf_billing_country;
                 $postal_code = $user_details->wcf_billing_postcode;
                 $customer_address = array('type' => 1);
 
@@ -1710,7 +1710,7 @@ class Clientify_Endpoint {
                     'products'       => $items,
                     'price'          => $details->cart_total,
                     'shipping'       => $shipping,
-                    'coupon'         =>  0,
+                    'coupon'         =>  $details->coupon_code ?: 0,
 
                 );
         $lang = get_bloginfo("language");
@@ -1741,8 +1741,8 @@ class Clientify_Endpoint {
         }
 
         $street = $user_details->wcf_billing_address_1 . $user_details->wcf_billing_address_2;
-        $city = $user_details->wcf_shipping_city;
-        $country = $user_details->wcf_shipping_country;
+        $city = $user_details->wcf_shipping_city ?: $user_details->wcf_billing_city;
+        $country = $user_details->wcf_shipping_country ?: $user_details->wcf_billing_country;
         $postal_code = $user_details->wcf_billing_postcode;
         $customer_address = array('type' => 1);
 

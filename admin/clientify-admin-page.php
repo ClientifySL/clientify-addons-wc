@@ -11,6 +11,7 @@ function clientify_settings_page()
 		'type_clean' => 'days' // Correcto: esto es un array
 	];
 	$helpers->delete_old_logs($params);
+	$new_abandoned_carts_count = $helpers->count_new_abandoned_carts();
 ?>
 	<div class="conten">
 		<input type="hidden" id="api" name="api" value="<?php echo esc_url( $api->api_url ); ?>">
@@ -28,6 +29,9 @@ function clientify_settings_page()
 			</a>
 			<a href="?page=clientify-addons&tab=abandoned_carts" class="nav-tab color-nav <?php if ($tab === 'abandoned_carts') : ?>nav-tab-active<?php endif; ?>">
 				<span class="dashicons dashicons-cart"></span><?php _e('Carritos Abandonados', 'clientify'); ?>
+				<?php if ( $new_abandoned_carts_count > 0 ) : ?>
+					<span class="clientify-badge"><?php echo esc_html( $new_abandoned_carts_count ); ?></span>
+				<?php endif; ?>
 			</a>
 		</nav>
 		<div class="body_clientify">
@@ -211,6 +215,8 @@ function clientify_settings_page()
 						global $wpdb;
 						$cart_table = $wpdb->prefix . 'clientify_ca_cart_abandonment';
 
+						$helpers->mark_abandoned_carts_as_seen();
+
 						if ($wpdb->get_var("SHOW TABLES LIKE '$cart_table'") != $cart_table) {
 							echo '<div class="general">';
 							echo '<div class="form-group">';
@@ -297,8 +303,8 @@ function clientify_settings_page()
 									'name'        => $full_name,
 									'phone'       => $other_fields->wcf_phone_number ?? '',
 									'address'     => $address,
-									'city'        => $other_fields->wcf_shipping_city ?? '',
-									'country'     => $other_fields->wcf_shipping_country ?? '',
+									'city'        => $other_fields->wcf_shipping_city ?: ($other_fields->wcf_billing_city ?? ''),
+									'country'     => $other_fields->wcf_shipping_country ?: ($other_fields->wcf_billing_country ?? ''),
 									'postalCode'  => $other_fields->wcf_billing_postcode ?? '',
 									'shipping'    => $other_fields->wcf_shipping_cost ?? '',
 									'coupon'      => $cart->coupon_code,

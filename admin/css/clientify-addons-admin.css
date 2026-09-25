@@ -201,6 +201,23 @@ h2.heading {
     color: #052451;
     text-decoration: none;
 }
+
+.clientify-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    margin-left: 4px;
+    border-radius: 9px;
+    background-color: #d63638;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1;
+    vertical-align: middle;
+}
 .controls input[type="text"],
 .controls textarea,
 .controls button,
