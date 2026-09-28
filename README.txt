@@ -4,7 +4,7 @@ Tags: woocommerce, clientify, integration, CRM, ecommerce
 Requires at least: 4.0
 Tested up to: 6.2.2
 Requires PHP: 7.4.2
-Stable tag: 1.1.4
+Stable tag: 1.1.5
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,17 @@ directory take precedence. For example, `/assets/screenshot-1.png` would win ove
 2. This is the second screen shot
 
 == Changelog ==
+
+= 1.1.5 =
+* Feature: nueva pestaña "Carritos Abandonados" en el panel de administración, con listado paginado y ficha de detalle de cada carrito (cliente, dirección, productos, cupón, etc).
+* Feature: botón para reenviar un carrito abandonado individual a Clientify.
+* Feature: botón para eliminar carritos abandonados antiguos (o todos), con confirmación.
+* Feature: notificación con el número de carritos abandonados nuevos, visible en el menú y en la pestaña, hasta que se revisan.
+* Fix: los errores ocurridos al consultar los carritos abandonados ahora quedan registrados en los logs del plugin.
+* Fix: se corrige un error crítico al listar los carritos abandonados.
+* Fix: el cupón aplicado por el cliente ahora se guarda correctamente en el carrito abandonado.
+* Fix: se completan ciudad y país del carrito abandonado usando los datos de facturación cuando no hay una dirección de envío distinta.
+* Fix: se corrige la captura de datos del cliente (nombre, teléfono, dirección) en el checkout de bloques de WooCommerce.
 
 = 1.1.4 =
 * Fix: se sincroniza el consentimiento GDPR en el checkout por bloques y se unifica la opcion de texto.
