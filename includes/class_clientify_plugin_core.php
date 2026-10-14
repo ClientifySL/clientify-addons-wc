@@ -928,7 +928,7 @@ class Clientify_Plugin_Core
 				}
 			}
 
-			$clientify_vk = isset($_COOKIE['vk']) ? sanitize_text_field($_COOKIE['cookie_cart_id']) : '';
+			$clientify_vk = isset($_COOKIE['vk']) ? sanitize_text_field($_COOKIE['vk']) : '';
 
 			if ( isset($clientify_vk) && $clientify_vk ) {
 				$data['visitor_key'] = (string)$clientify_vk;

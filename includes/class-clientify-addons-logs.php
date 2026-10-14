@@ -77,11 +77,7 @@ class Clientify_Addons_Logs {
             self::insert_log($level, $errstr, $errfile, $errline);
             self::$handling_error = false;
 
-            if ( defined( 'REST_REQUEST' ) && REST_REQUEST ) {
-                // Ya quedó registrado; dejamos que WP/PHP maneje la respuesta REST sin interferir.
-                return false;
-            }
-            return true; // Indicar a PHP que el error fue manejado — no imprimir al output
+            return true; // Indicar a PHP que el error fue manejado — no imprimir al output y no romper el JSON de las respuestas REST
         }
         /**
          * Handling uncaught exceptions.

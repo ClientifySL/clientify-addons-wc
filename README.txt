@@ -4,7 +4,7 @@ Tags: woocommerce, clientify, integration, CRM, ecommerce
 Requires at least: 4.0
 Tested up to: 6.2.2
 Requires PHP: 7.4.2
-Stable tag: 1.1.5
+Stable tag: 1.1.6
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,10 @@ directory take precedence. For example, `/assets/screenshot-1.png` would win ove
 2. This is the second screen shot
 
 == Changelog ==
+
+= 1.1.6 =
+* Fix: corregido warning al capturar el identificador del carrito abandonado (cookie_cart_id).
+* Fix: las respuestas de la API REST del plugin (como el estado de los webhooks) ya no se corrompen por errores PHP, evitando fallos al consultar el estado de conexión desde Clientify.
 
 = 1.1.5 =
 * Feature: nueva pestaña "Carritos Abandonados" en el panel de administración, con listado paginado y ficha de detalle de cada carrito (cliente, dirección, productos, cupón, etc).

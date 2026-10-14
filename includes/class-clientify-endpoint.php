@@ -27,6 +27,9 @@ class Clientify_Endpoint {
 
     public function clientify_set_endpoints(){
 
+        add_filter('rest_pre_dispatch', array($this, 'start_clean_output_buffer'), 10, 3);
+        add_filter('rest_post_dispatch', array($this, 'discard_stray_output'), 10, 3);
+
         register_rest_route('clientify/v1', '/pluginhandling', array(
             'methods' => 'POST',
             'permission_callback' => '__return_true',
@@ -529,6 +532,31 @@ class Clientify_Endpoint {
 		return $response;
 
 	}
+
+    /**
+     * Starts an output buffer for clientify/v1 REST requests so that any
+     * stray output (PHP warnings/notices/HTML) printed during the callback
+     * can be discarded before the JSON response is served.
+     */
+    public function start_clean_output_buffer($result, $server, $request) {
+        if ( strpos( $request->get_route(), '/clientify/v1/' ) === 0 ) {
+            ob_start();
+        }
+        return $result;
+    }
+
+    /**
+     * Discards anything that leaked into the output buffer during the
+     * dispatch of a clientify/v1 REST request, keeping the response clean.
+     */
+    public function discard_stray_output($response, $server, $request) {
+        if ( strpos( $request->get_route(), '/clientify/v1/' ) === 0 ) {
+            while ( ob_get_level() > 0 ) {
+                ob_end_clean();
+            }
+        }
+        return $response;
+    }
 
     function webhooks_status($params)
     {
