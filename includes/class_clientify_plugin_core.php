@@ -1439,7 +1439,7 @@ function agregar_opcion_suscripcion($menu_items) {
 				// Categoría principal
 				if (!in_array($term->term_id, $categories)) {
 					$categories[] = $term->term_id;
-					$join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->slug;
+					$join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->name;
 				}
 			} else {
 				// Subcategoría
@@ -1451,11 +1451,11 @@ function agregar_opcion_suscripcion($menu_items) {
 					if (!in_array($parent_id, $categories)) {
 						$parent_term = get_term($parent_id, 'product_cat');
 						$categories[] = $parent_id;
-						$join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->slug;
+						$join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->name;
 					}
 		
 					// Construir la cadena de subcategorías
-					$join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->slug . "|parent_id:" . $parent_id;
+					$join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->name . "|parent_id:" . $parent_id;
 				}
 			}
 		}
@@ -1657,7 +1657,7 @@ function agregar_opcion_suscripcion($menu_items) {
 								// CategorÃ­a principal
 								if (!in_array($term->term_id, $categories)) {
 									$categories[] = $term->term_id;
-									$join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->slug;
+									$join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->name;
 								}
 							} else {
 								// SubcategorÃ­a
@@ -1669,11 +1669,11 @@ function agregar_opcion_suscripcion($menu_items) {
 									if (!in_array($parent_id, $categories)) {
 										$parent_term = get_term($parent_id, 'product_cat');
 										$categories[] = $parent_id;
-										$join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->slug;
+										$join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->name;
 									}
 						
 									// Construir la cadena de subcategorÃ­as
-									$join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->slug . "|parent_id:" . $parent_id;
+									$join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->name . "|parent_id:" . $parent_id;
 								}
 							}
 						}
@@ -2249,7 +2249,7 @@ function agregar_opcion_suscripcion($menu_items) {
 						$terms = get_the_terms($product_id, 'product_cat');
 						foreach ( $terms as $term ) {
 							if ( $term->parent == 0 ){                                           
-								$categories[] = $term->term_id.":".$term->slug;
+								$categories[] = $term->term_id.":".$term->name;
 							}else{
 								foreach ( $categories as $cat ) {
 									$cat_data = explode(":",$cat);													
@@ -2258,14 +2258,14 @@ function agregar_opcion_suscripcion($menu_items) {
 								if( !$cat ){                            
 									$term_search = get_term_by('id', $term->parent, 'product_cat');
 									if($term_search->parent == 0){
-										$categories[] = $term_search->term_id.":".$term_search->slug;
+										$categories[] = $term_search->term_id.":".$term_search->name;
 									}
 									else{
-										$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term_search->parent;
+										$sub_categories[] = $term->term_id.":".$term->name."|parent_id:".$term_search->parent;
 									}                            
 								}
-								if ( !in_array($term->term_id.":".$term->slug."|parent_id:".$term_search->parent, $sub_categories) ) {
-										$sub_categories[] = $term->term_id.":".$term->slug."|parent_id:".$term->parent;
+								if ( !in_array($term->term_id.":".$term->name."|parent_id:".$term_search->parent, $sub_categories) ) {
+										$sub_categories[] = $term->term_id.":".$term->name."|parent_id:".$term->parent;
 									}
 								foreach ( $categories as $key => $value ) {                            
 									foreach( $sub_categories as $key => $value_sub ){

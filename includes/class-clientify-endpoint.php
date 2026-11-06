@@ -278,7 +278,7 @@ class Clientify_Endpoint {
                                 // Categoría principal
                                 if (!in_array($term->term_id, $categories)) {
                                     $categories[] = $term->term_id;
-                                    $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->slug;
+                                    $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->name;
                                 }
                             } else {
                                 // Subcategoría
@@ -290,11 +290,11 @@ class Clientify_Endpoint {
                                     if (!in_array($parent_id, $categories)) {
                                         $parent_term = get_term($parent_id, 'product_cat');
                                         $categories[] = $parent_id;
-                                        $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->slug;
+                                        $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->name;
                                     }
                         
                                     // Construir la cadena de subcategorías
-                                    $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->slug . "|parent_id:" . $parent_id;
+                                    $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->name . "|parent_id:" . $parent_id;
                                 }
                             }
                         }
@@ -1060,7 +1060,7 @@ class Clientify_Endpoint {
                     // Categoría principal
                     if (!in_array($term->term_id, $categories)) {
                         $categories[] = $term->term_id;
-                        $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->slug;
+                        $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->name;
                     }
                 } else {
                     // Subcategoría
@@ -1072,11 +1072,11 @@ class Clientify_Endpoint {
                         if (!in_array($parent_id, $categories)) {
                             $parent_term = get_term($parent_id, 'product_cat');
                             $categories[] = $parent_id;
-                            $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->slug;
+                            $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->name;
                         }
             
                         // Construir la cadena de subcategorías
-                        $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->slug . "|parent_id:" . $parent_id;
+                        $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->name . "|parent_id:" . $parent_id;
                     }
                 }
             }
@@ -1304,7 +1304,7 @@ class Clientify_Endpoint {
                                 // Categoría principal
                                 if (!in_array($term->term_id, $categories)) {
                                     $categories[] = $term->term_id;
-                                    $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->slug;
+                                    $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->name;
                                 }
                             } else {
                                 // Subcategoría
@@ -1316,11 +1316,11 @@ class Clientify_Endpoint {
                                     if (!in_array($parent_id, $categories)) {
                                         $parent_term = get_term($parent_id, 'product_cat');
                                         $categories[] = $parent_id;
-                                        $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->slug;
+                                        $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->name;
                                     }
                         
                                     // Construir la cadena de subcategorías
-                                    $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->slug . "|parent_id:" . $parent_id;
+                                    $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->name . "|parent_id:" . $parent_id;
                                 }
                             }
                         }
@@ -1620,7 +1620,7 @@ class Clientify_Endpoint {
                         // Categoría principal
                         if (!in_array($term->term_id, $categories)) {
                             $categories[] = $term->term_id;
-                            $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->slug;
+                            $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->name;
                         }
                     } else {
                         // Subcategoría
@@ -1632,11 +1632,11 @@ class Clientify_Endpoint {
                             if (!in_array($parent_id, $categories)) {
                                 $parent_term = get_term($parent_id, 'product_cat');
                                 $categories[] = $parent_id;
-                                $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->slug;
+                                $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->name;
                             }
 
                             // Construir la cadena de subcategorías
-                            $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->slug . "|parent_id:" . $parent_id;
+                            $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->name . "|parent_id:" . $parent_id;
                         }
                     }
                 }
@@ -1960,7 +1960,7 @@ class Clientify_Endpoint {
                                 // Categoría principal
                                 if (!in_array($term->term_id, $categories)) {
                                     $categories[] = $term->term_id;
-                                    $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->slug;
+                                    $join_categories .= ($join_categories == "" ? "" : ",") . $term->term_id . ":" . $term->name;
                                 }
                             } else {
                                 // Subcategoría
@@ -1972,11 +1972,11 @@ class Clientify_Endpoint {
                                     if (!in_array($parent_id, $categories)) {
                                         $parent_term = get_term($parent_id, 'product_cat');
                                         $categories[] = $parent_id;
-                                        $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->slug;
+                                        $join_categories .= ($join_categories == "" ? "" : ",") . $parent_id . ":" . $parent_term->name;
                                     }
 
                                     // Construir la cadena de subcategorías
-                                    $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->slug . "|parent_id:" . $parent_id;
+                                    $join_subcategories .= ($join_subcategories == "" ? "" : ",") . $term->term_id . ":" . $term->name . "|parent_id:" . $parent_id;
                                 }
                             }
                         }
