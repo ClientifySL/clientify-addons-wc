@@ -4,7 +4,7 @@ Tags: woocommerce, clientify, integration, CRM, ecommerce
 Requires at least: 4.0
 Tested up to: 6.2.2
 Requires PHP: 7.4.2
-Stable tag: 1.1.6
+Stable tag: 1.1.7
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ directory take precedence. For example, `/assets/screenshot-1.png` would win ove
 2. This is the second screen shot
 
 == Changelog ==
+
+= 1.1.7 =
+* Fix: las categorías y subcategorías de producto se envían a Clientify con su nombre tal cual aparece en la tienda (por ejemplo "Ropa Niños") en lugar del slug ("ropa-ninos").
 
 = 1.1.6 =
 * Fix: corregido warning al capturar el identificador del carrito abandonado (cookie_cart_id).
