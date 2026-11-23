@@ -52,6 +52,38 @@ class Clientify_Helper {
 	}
 
 	/**
+	 * Precio unitario y % de descuento de una línea de pedido tal como se cobró (CTF-3752).
+	 *
+	 * Sale de los importes guardados en la línea, no del catálogo: respeta el precio pagado
+	 * (rebajas, precios por rol...) y la fiscalidad del pedido. Lleva el IVA de la línea, que
+	 * es 0 si el pedido está exento, así que la suma de líneas cuadra con get_total().
+	 *
+	 * @param  WC_Order_Item_Product $order_item línea del pedido.
+	 * @return array { price: precio unitario antes de descuentos, discount: % de descuento }
+	 */
+	public static function get_order_item_amounts( $order_item ) {
+		$quantity = max( 1, (int) $order_item->get_quantity() );
+		$subtotal = (float) $order_item->get_subtotal() + (float) $order_item->get_subtotal_tax();
+		$total    = (float) $order_item->get_total() + (float) $order_item->get_total_tax();
+		$discount = $subtotal > 0 ? ( ( $subtotal - $total ) * 100 ) / $subtotal : 0;
+
+		return array(
+			'price'    => round( $subtotal / $quantity, 2 ),
+			'discount' => $discount > 0 ? round( $discount, 2 ) : 0,
+		);
+	}
+
+	/**
+	 * Envío del pedido con su IVA (CTF-3752): shipping_total viene siempre sin impuestos.
+	 *
+	 * @param  WC_Order $order pedido.
+	 * @return float
+	 */
+	public static function get_order_shipping_total( $order ) {
+		return round( (float) $order->get_shipping_total() + (float) $order->get_shipping_tax(), 2 );
+	}
+
+	/**
 	 * Get checkout url.
 	 *
 	 * @param  integer $post_id    post id.

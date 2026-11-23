@@ -317,31 +317,12 @@ class Clientify_Endpoint {
                     $product_id = $order_product['product_id'];
                     $product_instance = wc_get_product($product_id);
                     $product_full_description = $product_instance->get_description();
-                    $tax_amount = $order->get_item_tax($order_product, true, true);
-                    $inc_tax = $tax_amount > 0 ? true : false;
-                    $price = $product->get_sale_price();
-                    $discount_price = floatval($order_product['subtotal']) - floatval($order_product['total']);
                     $quantity = $order_product->get_quantity();
 
-                    if ($product->is_on_sale()) {
-                        $price = $product->get_sale_price();
-                    } else {
-                        $price = $product->get_regular_price();
-                    }
-
-                    if ( $inc_tax ) {
-                        $price = wc_get_price_including_tax($product, array('price' => $price));
-                    } else {
-                        $price = wc_get_price_excluding_tax($product, array('price' => $price));
-                    }
-
-                    if ($price == 0) {
-                        $discount = 0;
-                    } else {
-                        // Calcular el descuento por unidad de producto
-                        $unit_discount_price = $discount_price / $quantity;
-                        $discount = ($unit_discount_price * 100) / $price;
-                    }
+                    // CTF-3752: importes de la línea tal como se cobraron, no los del catálogo.
+                    $line_amounts = Clientify_Helper::get_order_item_amounts($order_product);
+                    $price = $line_amounts['price'];
+                    $discount = $line_amounts['discount'];
 
                     $items[] = array(
                         'name'        => $order_product->get_name(),
@@ -352,12 +333,9 @@ class Clientify_Endpoint {
                         'item_url'    => get_permalink($order_product['product_id']),
                         'price'       => number_format($price, 2, '.', ''),
                         'quantity'    => $quantity,
-                        'discount'    => $discount != 0 ? round($discount) : 0, //$discount
+                        'discount'    => $discount,
                         );
                 }
-               
-                //total discount
-                $order_discount_total = $order->get_total_discount(!$inc_tax);
 
                 $contact = 0;
 
@@ -469,11 +447,8 @@ class Clientify_Endpoint {
                     $contact['email'] = $order->get_billing_email();
                 }
 
-                $shipping = $order_data['shipping_total'];
-
-				if ($shipping === 0 || $shipping === "0" || $shipping === '' || $shipping === null || $shipping === false ) {
-					$shipping = 0; // Asegura que sea un entero 0
-				}
+                // CTF-3752: con su IVA, para que productos + envío cuadren con el total del pedido.
+                $shipping = Clientify_Helper::get_order_shipping_total($order);
 
                 $coupons = $order->get_coupon_codes();
                 $tipo_orden = $order->get_meta('tipodeorden');
@@ -495,7 +470,7 @@ class Clientify_Endpoint {
                     'products' => $items,
                     'price' =>  number_format($total_price, 2, '.', ''),
                     'shipping' => $shipping,
-                    'coupon' => $order_discount_total,
+                    'coupon' => 0, // CTF-3752: el cupón ya va repartido en el discount de cada línea
                     'order_tags' => $order_tags
                     );
 
@@ -1995,31 +1970,12 @@ class Clientify_Endpoint {
                     $product_id = $order_product['product_id'];
                     $product_instance = wc_get_product($product_id);
                     $product_full_description = $product_instance->get_description();
-                    $tax_amount = $order->get_item_tax($order_product, true, true);
-                    $inc_tax = $tax_amount > 0 ? true : false;
                     $quantity = $order_product->get_quantity(); 
 
-                    if ($product->is_on_sale()) {
-                        $price = $product->get_sale_price();
-                    } else {
-                        $price = $product->get_regular_price();
-                    }
-
-                    $discount_price = floatval($order_product['subtotal']) - floatval($order_product['total']);
-
-                    if ( $inc_tax ) {
-                        $price = wc_get_price_including_tax($product, array('price' => $price));
-                    } else {
-                        $price = wc_get_price_excluding_tax($product, array('price' => $price));
-                    }
-                    
-                    if ($price == 0) {
-                        $discount = 0;
-                    } else {
-                        // Calcular el descuento por unidad de producto
-                        $unit_discount_price = $discount_price / $quantity;
-                        $discount = ($unit_discount_price * 100) / $price;
-                    }
+                    // CTF-3752: importes de la línea tal como se cobraron, no los del catálogo.
+                    $line_amounts = Clientify_Helper::get_order_item_amounts($order_product);
+                    $price = $line_amounts['price'];
+                    $discount = $line_amounts['discount'];
                     
                     $items[] = array(
                         'name'        => $order_product->get_name(),
@@ -2030,12 +1986,9 @@ class Clientify_Endpoint {
                         'item_url'    => get_permalink($order_product['product_id']),
                         'price'       => number_format($price, 2, '.', ''),
                         'quantity'    => $order_product->get_quantity(),
-                        'discount'    => $discount != 0 ? round($discount) : 0, //$discount
+                        'discount'    => $discount,
                         );
                 }
-               
-                //total discount
-                $order_discount_total = $order->get_total_discount(!$inc_tax);
 
                 $contact = 0;
 
@@ -2147,11 +2100,8 @@ class Clientify_Endpoint {
                     $contact['email'] = $order->get_billing_email();
                 }
 
-                $shipping = $order_data['shipping_total'];
-
-				if ($shipping === 0 || $shipping === "0" || $shipping === '' || $shipping === null || $shipping === false ) {
-					$shipping = 0; // Asegura que sea un entero 0
-				}
+                // CTF-3752: con su IVA, para que productos + envío cuadren con el total del pedido.
+                $shipping = Clientify_Helper::get_order_shipping_total($order);
 				
                 $coupons = $order->get_coupon_codes();
                 $tipo_orden = $order->get_meta('tipodeorden');
@@ -2172,7 +2122,7 @@ class Clientify_Endpoint {
                     'products' => $items,
                     'price' =>  number_format($total_price, 2, '.', ''),
                     'shipping' => $shipping,
-                    'coupon' => $order_discount_total,
+                    'coupon' => 0, // CTF-3752: el cupón ya va repartido en el discount de cada línea
                     'order_tags' => $order_tags
                     );
 
