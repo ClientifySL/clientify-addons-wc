@@ -317,8 +317,6 @@ class Clientify_Endpoint {
                     $product_id = $order_product['product_id'];
                     $product_instance = wc_get_product($product_id);
                     $product_full_description = $product_instance->get_description();
-                    $tax_amount = $order->get_item_tax($order_product, true, true);
-                    $inc_tax = $tax_amount > 0 ? true : false;
                     $quantity = $order_product->get_quantity();
 
                     // CTF-3752: importes de la línea tal como se cobraron, no los del catálogo.
@@ -338,9 +336,6 @@ class Clientify_Endpoint {
                         'discount'    => $discount,
                         );
                 }
-               
-                //total discount
-                $order_discount_total = $order->get_total_discount(!$inc_tax);
 
                 $contact = 0;
 
@@ -475,7 +470,7 @@ class Clientify_Endpoint {
                     'products' => $items,
                     'price' =>  number_format($total_price, 2, '.', ''),
                     'shipping' => $shipping,
-                    'coupon' => $order_discount_total,
+                    'coupon' => 0, // CTF-3752: el cupón ya va repartido en el discount de cada línea
                     'order_tags' => $order_tags
                     );
 
@@ -1975,8 +1970,6 @@ class Clientify_Endpoint {
                     $product_id = $order_product['product_id'];
                     $product_instance = wc_get_product($product_id);
                     $product_full_description = $product_instance->get_description();
-                    $tax_amount = $order->get_item_tax($order_product, true, true);
-                    $inc_tax = $tax_amount > 0 ? true : false;
                     $quantity = $order_product->get_quantity(); 
 
                     // CTF-3752: importes de la línea tal como se cobraron, no los del catálogo.
@@ -1996,9 +1989,6 @@ class Clientify_Endpoint {
                         'discount'    => $discount,
                         );
                 }
-               
-                //total discount
-                $order_discount_total = $order->get_total_discount(!$inc_tax);
 
                 $contact = 0;
 
@@ -2132,7 +2122,7 @@ class Clientify_Endpoint {
                     'products' => $items,
                     'price' =>  number_format($total_price, 2, '.', ''),
                     'shipping' => $shipping,
-                    'coupon' => $order_discount_total,
+                    'coupon' => 0, // CTF-3752: el cupón ya va repartido en el discount de cada línea
                     'order_tags' => $order_tags
                     );
 
