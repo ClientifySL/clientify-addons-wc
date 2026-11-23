@@ -4,7 +4,7 @@ Tags: woocommerce, clientify, integration, CRM, ecommerce
 Requires at least: 4.0
 Tested up to: 6.2.2
 Requires PHP: 7.4.2
-Stable tag: 1.1.7
+Stable tag: 1.1.8
 License: GPL-2.0-or-later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -129,6 +129,9 @@ directory take precedence. For example, `/assets/screenshot-1.png` would win ove
 2. This is the second screen shot
 
 == Changelog ==
+
+= 1.1.8 =
+* Fix: el importe de los productos y del envío que llega a Clientify coincide con lo que pagó el cliente: precio cobrado en el pedido (rebajas, variaciones, pedidos exentos de IVA) en lugar del precio de catálogo, envío con su IVA y cupones aplicados una sola vez.
 
 = 1.1.7 =
 * Fix: las categorías y subcategorías de producto se envían a Clientify con su nombre tal cual aparece en la tienda (por ejemplo "Ropa Niños") en lugar del slug ("ropa-ninos").
